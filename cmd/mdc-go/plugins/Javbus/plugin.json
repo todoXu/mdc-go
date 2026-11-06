@@ -1,8 +1,0 @@
-{
-  "api_version": 2,
-  "id": "Javbus",
-  "name": "JavBus",
-  "version": "1.0.2",
-  "engine": "javascript-v1",
-  "base_url": "https://www.javbus.com"
-}

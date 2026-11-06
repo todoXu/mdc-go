@@ -1,0 +1,20 @@
+# 示例：docker compose up -d
+# 把下面的宿主机路径改成你自己的目录。
+services:
+  mdc-go:
+    image: mdc-go:0.1          # 已推送到镜像仓库时改成 <用户名>/mdc-go:0.1
+    build: .                   # 没有镜像时在本地构建
+    container_name: mdc-go
+    restart: unless-stopped
+    ports:
+      - "19208:19208"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      # 宿主机上的空目录即可；容器启动时 mdc-go 会生成里面需要的文件，已有的文件不会覆盖。
+      - /opt/mdc-go/data:/app/data       # 配置、数据库、日志、演员映射表、数据源设置
+      - /opt/mdc-go/plugins:/app/plugins # 数据源插件
+      # 媒体目录：容器里的路径就是页面上要填写的监控目录、整理目录。
+      - /mnt/media:/media
+    # 整理后的文件归属容器里的用户。需要和宿主机某个用户一致时取消注释（id -u / id -g 查看）。
+    # user: "1000:1000"

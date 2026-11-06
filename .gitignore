@@ -1,6 +1,7 @@
 # ---- 编译和打包产物 ----
 # go build 生成的程序
 /mdc-go.exe
+/mdc-go-linux*
 /bin/
 # tools/build.ps1 生成的单文件程序
 /dist/
@@ -23,6 +24,10 @@ coverage.*
 /data/
 # 插件目录：启动时从 internal/provider/defaults 复制内置插件，用户安装的第三方插件也放在这里
 /plugins/
+# 在编辑器里调试时，调试程序（__debug_bin）生成在 cmd/mdc-go 下，data、plugins 也会生成在那里
+/cmd/*/data/
+/cmd/*/plugins/
+__debug_bin*
 
 # ---- 本地开发工具 ----
 # tools/ 脚本使用的 Go 缓存、Prettier 等，放在项目内的 .tools 目录

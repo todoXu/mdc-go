@@ -1,0 +1,16 @@
+# 只把源码发给 docker 构建，运行时数据、编译产物、本地工具都不发送。
+.git
+data
+plugins
+cmd/*/data
+cmd/*/plugins
+**/__debug_bin*
+dist
+bin
+tools
+.tools
+.backup
+*.exe
+mdc-go-linux*
+*.zip
+*.log

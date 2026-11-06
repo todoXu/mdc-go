@@ -1,9 +1,0 @@
-{
-  "api_version": 2,
-  "id": "avbase",
-  "name": "avbase",
-  "version": "1.0.2",
-  "engine": "javascript-v1",
-  "base_url": "https://www.avbase.net",
-  "input_hint": "SKMJ-810、sekimen:SKMJ-810 或 avbase 作品链接"
-}
