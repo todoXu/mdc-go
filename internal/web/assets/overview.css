@@ -1,0 +1,614 @@
+/* 首页概览。外框、面板和标题沿用 style.css，这里只定义概览专用的组件，类名统一以 ov- 开头。 */
+.ov-page {
+  --ov-green: #5c9d83;
+  --ov-green-soft: #eff7f3;
+  --ov-orange: #d98a2b;
+  --ov-orange-soft: #fdf3e6;
+  --ov-red: #c95454;
+  --ov-red-soft: #fbeeee;
+}
+.ov-page .page-heading .subtitle:empty::before {
+  content: '\00a0';
+}
+.ov-heading-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.ov-version {
+  font-size: 10px;
+  color: #8a95a7;
+  background: #f2f4f7;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 指标卡 */
+.ov-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 25px;
+}
+.ov-stat {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 12px;
+}
+.ov-stat-label {
+  font-size: 12px;
+  color: #5b6474;
+}
+.ov-stat-number {
+  font-size: 30px;
+  font-weight: 550;
+  letter-spacing: -1px;
+  margin: 12px 0 11px;
+  line-height: 1;
+}
+.ov-stat-note {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+.ov-spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 34px;
+  align-self: end;
+  margin-bottom: 11px;
+}
+.ov-spark i {
+  width: 6px;
+  border-radius: 2px;
+  background: #d3ddf7;
+}
+.ov-spark i:last-child {
+  background: var(--blue);
+}
+.ov-spark-fail i {
+  background: #f1d6d6;
+}
+.ov-spark-fail i:last-child {
+  background: var(--ov-red);
+}
+.ov-tag {
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.ov-up {
+  background: var(--ov-green-soft);
+  color: var(--ov-green);
+}
+.ov-warn {
+  background: var(--ov-orange-soft);
+  color: var(--ov-orange);
+}
+.ov-bad {
+  background: var(--ov-red-soft);
+  color: var(--ov-red);
+}
+.ov-info {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.ov-mute {
+  background: #f2f4f7;
+  color: #8a95a7;
+}
+
+.ov-grid .panel-head small {
+  margin-left: 8px;
+  font-weight: 400;
+}
+.ov-empty {
+  padding: 26px 23px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.ov-empty a {
+  color: var(--blue);
+}
+.ov-ok {
+  color: var(--ov-green);
+}
+
+/* 任务队列 */
+.ov-queue-idle {
+  padding: 18px 23px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ov-dist {
+  padding: 16px 23px 14px;
+  border-bottom: 1px solid #f0f2f5;
+}
+.ov-dist-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #eef1f5;
+}
+.ov-dist-bar i {
+  display: block;
+}
+.ov-dist-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #6b7383;
+}
+.ov-dist-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.ov-dist-legend b {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: 2px;
+}
+.ov-dist-legend .ov-zero {
+  opacity: 0.45;
+}
+.ov-rows-head,
+.ov-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(120px, 1.3fr) minmax(70px, 1fr) 96px;
+  gap: 14px;
+  align-items: center;
+  padding: 0 23px;
+}
+.ov-rows-head {
+  padding-top: 12px;
+  padding-bottom: 6px;
+  font-size: 10px;
+  color: #9ba5b4;
+  letter-spacing: 1px;
+}
+.ov-rows-head span:last-child,
+.ov-row-time {
+  text-align: right;
+}
+.ov-row {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  font-size: 12px;
+  border-top: 1px solid #f5f6f8;
+}
+.ov-row a {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-row a:hover {
+  color: var(--blue);
+}
+.ov-row-stage {
+  font-size: 11px;
+  color: #5b6474;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-mini {
+  height: 4px;
+  border-radius: 2px;
+  background: #eef1f5;
+  overflow: hidden;
+}
+.ov-mini i {
+  display: block;
+  height: 100%;
+  background: #a9bdf1;
+  transition: width 0.8s linear;
+}
+.ov-row-time b {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ov-row-time small {
+  color: #a0a7b3;
+  font-size: 10px;
+  margin-left: 3px;
+}
+.ov-row.ov-slow .ov-mini i {
+  background: var(--ov-orange);
+}
+.ov-row.ov-slow .ov-row-time b {
+  color: var(--ov-orange);
+}
+.ov-foot {
+  padding: 11px 23px;
+  background: #fafbfc;
+  border-top: 1px solid #f0f2f5;
+  color: var(--muted);
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+}
+.ov-foot a {
+  color: var(--blue);
+}
+
+/* 最近完成：海报宽 110～150px，屏幕越宽列数越多，只显示一行 */
+.ov-posters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-rows: auto;
+  grid-auto-rows: 0;
+  gap: 0 14px;
+  overflow: hidden;
+  padding: 18px 23px 20px;
+}
+.ov-poster {
+  display: block;
+  max-width: 150px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  clip-path: inset(0);
+}
+.ov-cover {
+  aspect-ratio: 2 / 3;
+  border-radius: 7px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 8px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  text-shadow: 0 1px 3px #0006;
+}
+.ov-cover img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* 有海报图时番号已印在海报上，不再叠字；图片加载失败会被移除，番号重新显示 */
+.ov-cover img ~ .ov-cover-num {
+  display: none;
+}
+.ov-cover-num {
+  position: relative;
+}
+.ov-warnmark {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ov-orange);
+  color: #fff;
+  font-size: 10px;
+  display: grid;
+  place-items: center;
+  text-shadow: none;
+}
+.ov-poster p {
+  margin: 7px 0 1px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ov-poster small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.ov-poster:hover p {
+  color: var(--blue);
+}
+
+/* 近 7 天 */
+.ov-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  height: 130px;
+  padding: 18px 23px 8px;
+}
+.ov-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  height: 100%;
+}
+.ov-col-num {
+  font-size: 10px;
+  color: #8a95a7;
+  min-height: 13px;
+}
+.ov-stack {
+  width: 100%;
+  max-width: 24px;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 3px;
+  overflow: hidden;
+  min-height: 3px;
+}
+.ov-stack i {
+  display: block;
+}
+.ov-stack-empty {
+  height: 3px;
+  background: #eef1f5;
+}
+.ov-c-done {
+  background: #a9bdf1;
+}
+.ov-c-fail {
+  background: #eba8a8;
+}
+.ov-c-done.ov-today {
+  background: var(--blue);
+}
+.ov-c-fail.ov-today {
+  background: var(--ov-red);
+}
+.ov-col small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.ov-col .ov-today-label {
+  color: var(--text);
+}
+.ov-legend {
+  display: flex;
+  gap: 14px;
+  padding: 0 23px 16px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.ov-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
+/* 需要关注 */
+.ov-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px 23px;
+  border-bottom: 1px solid #f0f2f5;
+}
+.ov-alert:last-child {
+  border-bottom: 0;
+}
+.ov-ic {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+.ov-alert b {
+  font-size: 12px;
+  font-weight: 600;
+}
+.ov-alert a:hover b {
+  color: var(--blue);
+}
+.ov-alert small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 监控目录 */
+.ov-watch-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 23px;
+  background: #fafbfc;
+  border-bottom: 1px solid #f0f2f5;
+  font-size: 11px;
+  color: #6b7383;
+}
+.ov-watch-line a,
+.ov-link {
+  color: var(--blue);
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 11px;
+}
+.ov-link:disabled {
+  opacity: 0.5;
+}
+.ov-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #53ae8b;
+  box-shadow: 0 0 0 3px #53ae8b22;
+  margin-right: 8px;
+  vertical-align: 1px;
+}
+.ov-dot-off {
+  background: #b5bcc8;
+  box-shadow: 0 0 0 3px #b5bcc822;
+}
+.ov-dot-run {
+  background: var(--blue);
+  box-shadow: 0 0 0 3px #4169e122;
+  animation: ov-pulse 1.2s infinite;
+}
+@keyframes ov-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.ov-dir {
+  display: block;
+  padding: 14px 23px;
+  border-bottom: 1px solid #f0f2f5;
+}
+.ov-dir:last-child {
+  border-bottom: 0;
+}
+.ov-dir:hover {
+  background: #fafbfd;
+}
+.ov-dir-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.ov-dir-head b {
+  font-size: 12px;
+  font-family: Consolas, monospace;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-dir-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 7px;
+}
+.ov-dir-meta strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.ov-err {
+  color: var(--ov-red);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.ov-warn-text {
+  color: var(--ov-orange);
+}
+.ov-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: #eef1f5;
+  overflow: hidden;
+  margin-top: 10px;
+  display: flex;
+}
+.ov-bar i {
+  display: block;
+  height: 100%;
+}
+
+/* 数据源 */
+.ov-src {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 36px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 23px;
+  border-bottom: 1px solid #f0f2f5;
+  font-size: 12px;
+}
+.ov-src:last-child {
+  border-bottom: 0;
+}
+.ov-src:hover {
+  background: #fafbfd;
+}
+.ov-src b {
+  font-weight: 600;
+}
+.ov-src small {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  margin-top: 2px;
+}
+.ov-src > span {
+  text-align: right;
+  font-size: 11px;
+}
+.ov-meter {
+  height: 5px;
+  border-radius: 3px;
+  background: #eef1f5;
+  overflow: hidden;
+}
+.ov-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+@media (max-width: 1100px) {
+  .ov-stats {
+    gap: 10px;
+  }
+  .ov-stat {
+    padding: 17px;
+  }
+}
+@media (min-width: 1600px) {
+  .ov-stat {
+    padding: 24px;
+  }
+}
+@media (max-width: 760px) {
+  .ov-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ov-rows-head,
+  .ov-row {
+    grid-template-columns: minmax(90px, 1fr) minmax(0, 1fr) 84px;
+  }
+  .ov-rows-head span:nth-child(3),
+  .ov-row .ov-mini {
+    display: none;
+  }
+}

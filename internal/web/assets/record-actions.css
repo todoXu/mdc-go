@@ -1,0 +1,102 @@
+.record-status-actions, .record-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.record-status-actions { flex-wrap: wrap; }
+.record-actions { gap: 4px; }
+.record-actions .icon-button { width: 36px; height: 36px; }
+.record-actions svg { width: 19px; height: 19px; }
+/* 弹窗：sm 表单类（任务、批量、删除），md 编辑元数据，lg 封面裁剪 */
+.record-editor {
+  width: min(520px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 40px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--surface, #fff);
+  box-shadow: 0 20px 60px #17233b33;
+}
+.record-editor:focus { outline: none; }
+.record-editor-md { width: min(900px, calc(100vw - 32px)); }
+.record-editor-lg { width: min(1200px, calc(100vw - 32px)); }
+.record-editor::backdrop { background: #111b30a8; }
+.record-editor > form { display: flex; flex-direction: column; max-height: calc(100dvh - 42px); }
+.record-editor header, .record-editor footer { display: flex; align-items: center; gap: 10px; padding: 14px 20px; flex-shrink: 0; }
+.record-editor header { justify-content: space-between; border-bottom: 1px solid var(--line); }
+.record-editor header h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.record-editor header .icon-button { width: 30px; height: 30px; }
+/* 覆盖页面级 footer 样式（max-width、居中、字距），否则按钮栏会挤在中间 */
+.record-editor footer { max-width: none; width: auto; margin: 0; letter-spacing: normal; color: inherit; font-size: inherit; justify-content: flex-end; border-top: 1px solid var(--line); background: #fafbfd; border-radius: 0 0 14px 14px; }
+.record-editor-body { padding: 16px 20px; overflow-y: auto; }
+.record-editor-body > .muted { line-height: 1.7; margin-top: 0; }
+.record-editor-error { color: #b54040; padding: 0 20px; margin: 0 0 10px; overflow-wrap: anywhere; font-size: 13px; }
+.record-editor-error:empty { display: none; }
+
+/* 表单类弹窗的通用结构 */
+.rd-section { margin: 0 0 16px; }
+.rd-section:last-child { margin-bottom: 0; }
+.rd-label { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.rd-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+.rd-hint.rd-intro { margin: 0 0 14px; }
+.rd-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.rd-field { display: grid; gap: 5px; min-width: 0; }
+.rd-field > span { font-size: 12px; color: #6b7685; }
+.rd-field input, .rd-field select { width: 100%; min-width: 0; height: 34px; padding: 0 10px; font-size: 13px; background: #fff; }
+.rd-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rd-choice { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.rd-choice:has(input:checked) { border-color: var(--blue); background: #f4f7fe; }
+.rd-choice:has(input:disabled) { opacity: .55; cursor: default; }
+.rd-choice input { margin: 3px 0 0; }
+.rd-choice b { display: block; font-size: 13px; font-weight: 600; }
+.rd-choice small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.rd-checks { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 10px; font-size: 13px; }
+.rd-checks label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* 编辑元数据：短字段两两并排，长字段占满一行 */
+.record-edit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+/* 标签放在输入框左边，省掉每个字段单独一行的标签高度 */
+.record-edit-field { min-width: 0; display: grid; grid-template-columns: 4.5em minmax(0, 1fr); align-items: start; gap: 8px; }
+.record-edit-field.wide { grid-column: 1 / -1; }
+.record-edit-field > span { padding-top: 8px; font-size: 12px; color: #6b7685; white-space: nowrap; }
+.record-edit-field > div { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
+.record-edit-field textarea { display: block; min-width: 0; flex: 1; resize: vertical; overflow-y: auto; line-height: 1.5; padding: 6px 10px; font-size: 13px; min-height: 34px; }
+.record-edit-field input[type="text"] { min-width: 0; flex: 1; height: 34px; padding: 0 10px; font-size: 13px; }
+.record-edit-field textarea[readonly], .record-edit-field input[type="text"][readonly] { background: #f6f8fb; color: #4b576b; }
+.record-edit-field select { width: 92px; flex: none; height: 34px; padding: 0 6px; font-size: 12px; background: #fff; }
+.record-edit-field .icon-button { width: 34px; height: 34px; flex: none; }
+/* 只继承字体，不继承字号，字号由各弹窗自己的规则决定 */
+.record-editor textarea, .record-editor input:not([type=radio]):not([type=checkbox]):not([type=range]):not([type=file]), .record-editor select { border: 1px solid var(--line); border-radius: 8px; font-family: inherit; font-size: 13px; }
+.record-editor fieldset { border: 0; padding: 0; margin: 20px 0 28px; }
+.record-editor legend { font-weight: 600; margin-bottom: 12px; }
+.record-editor fieldset > label { display: block; margin: 13px 0; }
+.record-editor fieldset small { display: block; margin: 5px 0 0 24px; color: var(--muted); }
+.record-form-field { display: grid; gap: 10px; margin: 22px 0; }
+.record-form-field input { padding: 12px; width: 100%; }
+.record-form-field select { padding: 10px 12px; width: 100%; }
+.record-delete-media { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; color: #a24646; }
+.record-delete-warning { margin: 0; color: #8b6262; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.record-delete-warning code { color: #a24646; background: #fff3f3; border-radius: 4px; padding: 2px 5px; }
+.record-flag-options { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 18px; }
+.crop-source-row { display: flex; align-items: flex-end; gap: 16px; margin: 0 0 25px; }
+.crop-source-row > label { flex: 1; display: flex; align-items: center; gap: 20px; min-width: 0; }
+.crop-source-row select { flex: 1; min-width: 0; padding: 10px; }
+.record-crop-layout { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 30px; }
+.record-crop-canvas { display: block; width: 100%; max-height: 560px; object-fit: contain; background: #111; border-radius: 10px; touch-action: none; cursor: grab; }
+.record-crop-canvas:active { cursor: grabbing; }
+.record-crop-layout aside select { display: block; margin-top: 8px; padding: 8px; width: 100%; }
+.crop-zoom { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
+.crop-zoom input { flex: 1; min-width: 0; }
+.crop-zoom output { min-width: 45px; }
+@media (max-width: 740px) {
+  .record-editor header, .record-editor footer { padding: 12px 16px; }
+  .record-editor-body { padding: 14px 16px; }
+  .record-edit-fields, .rd-grid2, .rd-choices { grid-template-columns: 1fr; }
+  .record-edit-field > div { flex-wrap: wrap; }
+  .record-edit-field textarea { flex-basis: 100%; }
+  .record-crop-layout { grid-template-columns: minmax(0, 1fr); }
+  .crop-source-row { flex-wrap: wrap; }
+  .crop-source-row > label { flex-basis: 100%; flex-wrap: wrap; }
+}

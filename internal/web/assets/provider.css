@@ -1,0 +1,21 @@
+.metadata-result > div {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.metadata-result > div span { color: var(--muted); }
+.metadata-result b { font-weight: 400; color: var(--text); overflow-wrap: anywhere; }
+.metadata-result p { margin: 18px 0 12px; }
+.metadata-result a { margin-right: 8px; }
+#source-result { min-height: 54px; }
+.provider-card [role='status'] { line-height: 1.8; color: #7c8a9e; }
+.provider-heading-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.provider-actions { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  #fetch-form { flex-wrap: wrap; }
+  #fetch-form input { flex-basis: 100%; }
+  .metadata-result > div { grid-template-columns: 65px minmax(0, 1fr); }
+}

@@ -1,0 +1,42 @@
+# ---- 编译和打包产物 ----
+# go build 生成的程序
+/mdc-go.exe
+/bin/
+*.exe
+# tools/package_windows.py 生成的发布包和校验文件
+/mdc-go-windows-x64.zip
+/mdc-go-windows-x64.zip.sha256
+# go test 生成的测试程序和覆盖率文件
+*.test
+*.out
+coverage.*
+
+# ---- 运行时数据 ----
+# data/ 是纯运行时目录，整个不提交。缺少的文件在启动时从内置默认生成：
+#   config.json       ← internal/server/assets/defaults.json
+#   mapping_actor.xml ← internal/server/assets/mapping_actor_default.xml
+#   providers.json    ← internal/server/assets/providers_default.json
+#   priorities.json   ← internal/server/assets/priorities_default.json
+# 其余是刮削数据库、日志、头像缓存和下载的自定义映射表。config.json 含 GitHub Token、Emby API Key 等密钥。
+/data/
+# 插件目录：启动时从 internal/provider/defaults 复制内置插件，用户安装的第三方插件也放在这里
+/plugins/
+
+# ---- 本地开发工具 ----
+# tools/ 脚本使用的 Go 缓存、Prettier 等，放在项目内的 .tools 目录
+/.tools/
+__pycache__/
+*.pyc
+
+# ---- 临时文件和备份 ----
+/.backup/
+*.tmp
+*.log
+
+# ---- 编辑器和系统 ----
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
