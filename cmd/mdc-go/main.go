@@ -8,12 +8,33 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"mdcng-go/internal/server"
 	"mdcng-go/internal/web"
 )
+
+// appDir 返回程序文件所在的目录，data 和 plugins 默认放在这里，从哪个目录启动都一样。
+// go run 时程序在临时编译目录里，这时退回当前目录，方便开发。
+func appDir() string {
+	exe, err := os.Executable()
+	if err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		dir := filepath.Dir(exe)
+		if !strings.Contains(dir, "go-build") {
+			return dir
+		}
+	}
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return "."
+}
 
 // fatal 记录错误后退出。错误等级总会被记录，不受日志等级设置影响。
 func fatal(message string, args ...any) {
@@ -22,9 +43,10 @@ func fatal(message string, args ...any) {
 }
 
 func main() {
-	addr := flag.String("listen", "127.0.0.1:19208", "HTTP listen address")
-	data := flag.String("data", "data", "local configuration directory")
-	plugins := flag.String("plugins", "plugins", "data source plugin directory")
+	addr := flag.String("listen", "0.0.0.0:19208", "HTTP listen address")
+	base := appDir()
+	data := flag.String("data", filepath.Join(base, "data"), "runtime data directory (config, database, logs); created on first start")
+	plugins := flag.String("plugins", filepath.Join(base, "plugins"), "data source plugin directory; built-in plugins are written here on first start")
 	assets := flag.String("assets", "", "development only: serve frontend files from this directory instead of the embedded copy")
 	flag.Parse()
 	// 日志按 system.log_level 过滤；读取配置之前使用默认等级。
@@ -58,7 +80,7 @@ func main() {
 		}
 	}()
 	// 访问地址直接打印到控制台，不受日志等级影响，方便确认程序已启动。
-	fmt.Fprintf(os.Stderr, "mdc-go listening on http://%s\n", *addr)
+	fmt.Fprintf(os.Stderr, "mdc-go %s listening on http://%s (data: %s)\n", server.Version, *addr, *data)
 	slog.Info("[main] 服务已启动", "listen", *addr)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fatal("[main] HTTP 服务异常退出", "error", err)

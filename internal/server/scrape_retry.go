@@ -151,7 +151,7 @@ func commitScrapeRetryManagedNFO(ctx context.Context, path, output string, write
 			return err
 		}
 	}
-	if !strings.EqualFold(path, output) {
+	if pathKey(path) != pathKey(output) {
 		if _, err := os.Lstat(output); err == nil {
 			return fmt.Errorf("目标视频文件已存在：%s", output)
 		} else if !errors.Is(err, os.ErrNotExist) {

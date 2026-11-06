@@ -27,6 +27,20 @@ func (s *Server) queueReorganize(id, from string) {
 		slog.Error("[reorganize] 读取整理设置失败", "id", id, "error", err)
 		return
 	}
+	// 编辑元数据时已经检查过；这里再检查一次，防止两次请求之间整理方式被修改。
+	s.jobsMu.RLock()
+	var current scrapeJob
+	for i := range s.jobs {
+		if s.jobs[i].ID == id {
+			current = s.jobs[i]
+			break
+		}
+	}
+	s.jobsMu.RUnlock()
+	if err := linkModeChangeError(current, settings.Common.LinkMode); err != nil {
+		slog.Warn("[reorganize] 整理方式已改变，跳过自动重新整理", "id", id, "error", err)
+		return
+	}
 
 	queued := false
 	s.jobsMu.Lock()
@@ -71,7 +85,7 @@ func cleanupReorganizedOutput(from, to string, settings scrapeSettings, linkMode
 		return
 	}
 	oldDir, newDir := filepath.Dir(from), filepath.Dir(to)
-	sameDir := strings.EqualFold(filepath.Clean(oldDir), filepath.Clean(newDir))
+	sameDir := pathKey(oldDir) == pathKey(newDir)
 	base := strings.TrimSuffix(from, filepath.Ext(from))
 	newBase := strings.TrimSuffix(to, filepath.Ext(to))
 	remove := func(path string) {

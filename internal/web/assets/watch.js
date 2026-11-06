@@ -5,6 +5,7 @@ import { renderWatermarkFields, readWatermarkFields, bindWatermarkFields } from 
 import { renderNFOFields, readNFOFields } from './nfo.js';
 import { mountDirectoryProviders, readDirectoryProviders } from './directory-providers.js';
 import { onJobEvents } from './job-events.js';
+import { isAbsolutePath, absolutePathHint, isWindows } from './platform.js';
 
 const commonKeys = [
   'target_folder', 'delete_metadata_folder_when_failed', 'link_mode', 'strm_path_from', 'strm_path_to',
@@ -14,6 +15,17 @@ const commonKeys = [
 ];
 const modes = [['2', '移动'], ['3', '原地整理'], ['4', 'STRM']];
 const $ = (selector, root = document) => root.querySelector(selector);
+
+// 新监控目录的 ID（UUID v4 格式）。crypto.randomUUID 只在 HTTPS 或 localhost 下可用，
+// 通过局域网 IP 用 http 打开页面时没有这个函数，所以退回用 crypto.getRandomValues 生成。
+function newDirectoryID() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 function copyCommon(source) {
   return Object.fromEntries(commonKeys.map((key) => [key, structuredClone(source[key] ?? (key.endsWith('_keywords') || key.endsWith('_blacklist') || key === 'file_ext_filter' ? [] : key === 'target_folder' ? '' : 0))]));
@@ -93,7 +105,7 @@ export async function watchSettings({ heading, toast, markDirty, clearDirty, rel
   };
   return {
     html: heading('设置', '按固定周期完整扫描监控目录，并自动创建整理任务。') +
-      `<div class="settings-layout"><nav class="settings-nav"><a href="#/settings/common">整理</a><a class="active" href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a href="#/settings/watermark">水印</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a href="#/settings/user">用户</a></nav><section class="panel watch-panel"><div class="download-section-title"><h2>监控设置</h2><p>按检查周期扫描已配置的目录，发现新视频后自动刮削。</p></div><div class="field"><label class="field-label" for="watch-enabled">启用目录监控<small>开启后定时扫描所有已配置目录并自动创建任务。</small></label><input id="watch-enabled" class="switch" type="checkbox" ${draft.watcher_enabled ? 'checked' : ''}></div><div class="field"><div class="field-label">扫描方式<small>按检查周期完整扫描目录及子目录，适用于本地磁盘和映射的网络磁盘。</small></div><strong class="watch-mode-label">定时完整扫描</strong></div><div class="field"><label class="field-label" for="watch-interval">检查周期（秒）<small>每隔多久完整扫描一次；范围 1～86400 秒，默认 30 秒。</small></label><input id="watch-interval" type="number" min="1" max="86400" step="1" value="${h(draft.watcher_poll_interval_seconds)}"></div><div class="download-section-title watch-list-heading"><h2>监控目录</h2><button id="watch-add" class="button" type="button">＋ 添加监控目录</button></div><div id="watch-list">${draft.watch_dirs.map(row).join('')}</div><div class="watch-status-bar"><span id="watch-status">${status.running ? '正在扫描…' : status.last_scan ? `上次扫描：${new Date(status.last_scan).toLocaleString()}` : '尚未扫描'}</span><button class="button small" id="watch-scan" type="button">立即扫描</button></div><div class="download-section-title"><h2>最近发现</h2><p>命中过滤规则的新视频会自动进入刮削任务；数据库已有成功记录的视频不会重复处理。</p></div><div class="watch-recent"><div id="watch-recent-items">${recentHTML(status.recent)}</div></div><div class="savebar"><span id="watch-save-status">修改后请保存</span><div><button class="button" id="watch-reset" type="button">撤销修改</button> <button class="button primary" id="watch-save" type="button">保存修改</button></div></div></section></div><dialog id="watch-config-dialog" class="watch-config-dialog"><div id="watch-config-content"></div></dialog><dialog id="watch-folder-dialog" class="folder-dialog"><div class="folder-dialog-head"><h2>选择文件夹</h2><button class="icon-button" id="watch-folder-close" type="button" aria-label="关闭">×</button></div><div class="folder-location"><button class="button small" id="watch-folder-up" type="button">↑ 上一级</button><input id="watch-folder-path" type="text" aria-label="目录路径" placeholder="磁盘或完整路径"><button class="button small" id="watch-folder-go" type="button">转到</button></div><div id="watch-folder-list" class="folder-list" role="list"></div><p id="watch-folder-status" class="folder-status" role="status"></p><div class="folder-dialog-actions"><button class="button" id="watch-folder-cancel" type="button">取消</button><button class="button primary" id="watch-folder-select" type="button" disabled>选择此目录</button></div></dialog>`,
+      `<div class="settings-layout"><nav class="settings-nav"><a href="#/settings/common">整理</a><a class="active" href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a href="#/settings/watermark">水印</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a href="#/settings/user">用户</a></nav><section class="panel watch-panel"><div class="download-section-title"><h2>监控设置</h2><p>按检查周期扫描已配置的目录，发现新视频后自动刮削。</p></div><div class="field"><label class="field-label" for="watch-enabled">启用目录监控<small>开启后定时扫描所有已配置目录并自动创建任务。</small></label><input id="watch-enabled" class="switch" type="checkbox" ${draft.watcher_enabled ? 'checked' : ''}></div><div class="field"><div class="field-label">扫描方式<small>按检查周期完整扫描目录及子目录，适用于本地磁盘和已挂载的网络共享。</small></div><strong class="watch-mode-label">定时完整扫描</strong></div><div class="field"><label class="field-label" for="watch-interval">检查周期（秒）<small>每隔多久完整扫描一次；范围 1～86400 秒，默认 30 秒。</small></label><input id="watch-interval" type="number" min="1" max="86400" step="1" value="${h(draft.watcher_poll_interval_seconds)}"></div><div class="download-section-title watch-list-heading"><h2>监控目录</h2><button id="watch-add" class="button" type="button">＋ 添加监控目录</button></div><div id="watch-list">${draft.watch_dirs.map(row).join('')}</div><div class="watch-status-bar"><span id="watch-status">${status.running ? '正在扫描…' : status.last_scan ? `上次扫描：${new Date(status.last_scan).toLocaleString()}` : '尚未扫描'}</span><button class="button small" id="watch-scan" type="button">立即扫描</button></div><div class="download-section-title"><h2>最近发现</h2><p>命中过滤规则的新视频会自动进入刮削任务；数据库已有成功记录的视频不会重复处理。</p></div><div class="watch-recent"><div id="watch-recent-items">${recentHTML(status.recent)}</div></div><div class="savebar"><span id="watch-save-status">修改后请保存</span><div><button class="button" id="watch-reset" type="button">撤销修改</button> <button class="button primary" id="watch-save" type="button">保存修改</button></div></div></section></div><dialog id="watch-config-dialog" class="watch-config-dialog"><div id="watch-config-content"></div></dialog><dialog id="watch-folder-dialog" class="folder-dialog"><div class="folder-dialog-head"><h2>选择文件夹</h2><button class="icon-button" id="watch-folder-close" type="button" aria-label="关闭">×</button></div><div class="folder-location"><button class="button small" id="watch-folder-up" type="button">↑ 上一级</button><input id="watch-folder-path" type="text" aria-label="目录路径" placeholder="完整目录路径"><button class="button small" id="watch-folder-go" type="button">转到</button></div><div id="watch-folder-list" class="folder-list" role="list"></div><p id="watch-folder-status" class="folder-status" role="status"></p><div class="folder-dialog-actions"><button class="button" id="watch-folder-cancel" type="button">取消</button><button class="button primary" id="watch-folder-select" type="button" disabled>选择此目录</button></div></dialog>`,
     bind() {
       const mark = () => {
         const changed = stableState(draft) !== savedState;
@@ -115,7 +127,7 @@ export async function watchSettings({ heading, toast, markDirty, clearDirty, rel
           $('#watch-folder-up').disabled = !folderState.path;
           $('#watch-folder-select').disabled = !folderState.path;
           $('#watch-folder-list').innerHTML = folderState.folders.length ? folderState.folders.map((item) => `<button type="button" class="folder-item" data-path="${h(item.path)}"><span aria-hidden="true">▰</span>${h(item.name)}</button>`).join('') : '<div class="folder-empty">没有子文件夹</div>';
-          $('#watch-folder-status').textContent = folderState.path || '请选择磁盘';
+          $('#watch-folder-status').textContent = folderState.path || '请选择起始目录';
           $('#watch-folder-list').querySelectorAll('[data-path]').forEach((button) => button.onclick = () => browse(button.dataset.path));
         } catch (error) { $('#watch-folder-status').textContent = error.message; }
       };
@@ -216,7 +228,7 @@ export async function watchSettings({ heading, toast, markDirty, clearDirty, rel
             const mode = Number($('#watch-mode', content).value);
             const target = $('#watch-target', content).value.trim();
             // 整理目录可以留空；开启目录监控后保存时由后端检查是否可用。
-            if (!useGlobal && target && !/^(?:[a-zA-Z]:[\\/]|\\\\)/.test(target)) throw Error('请选择有效的 Windows 整理目录');
+            if (!useGlobal && target && !isAbsolutePath(target)) throw Error(absolutePathHint('整理目录'));
             const size = Math.round(Number($('#watch-size', content).value) * 1048576);
             if (!Number.isSafeInteger(size) || size < 0) throw Error('文件大小过滤须为有效的非负数');
             dir.use_global_config = useGlobal;
@@ -266,7 +278,7 @@ export async function watchSettings({ heading, toast, markDirty, clearDirty, rel
       renderRows();
       $('#watch-enabled').onchange = (event) => { draft.watcher_enabled = event.target.checked; mark(); };
       $('#watch-interval').oninput = (event) => { draft.watcher_poll_interval_seconds = Number(event.target.value); mark(); };
-      $('#watch-add').onclick = () => { draft.watch_dirs.push({ id: crypto.randomUUID(), path: '', enabled: true, use_global_config: false, common: copyCommon(global), use_global_download: true, download: structuredClone(globalDownload), use_global_naming: true, naming: structuredClone(globalNaming), use_global_watermark: true, watermark: structuredClone(globalWatermark), use_global_nfo: true, nfo: structuredClone(globalNFO), use_global_providers: true, providers: { configs: structuredClone(globalProviderConfigs), priorities: structuredClone(globalPriorities.config) } }); mark(); renderRows(); list.lastElementChild?.querySelector('.watch-path')?.focus(); };
+      $('#watch-add').onclick = () => { draft.watch_dirs.push({ id: newDirectoryID(), path: '', enabled: true, use_global_config: false, common: copyCommon(global), use_global_download: true, download: structuredClone(globalDownload), use_global_naming: true, naming: structuredClone(globalNaming), use_global_watermark: true, watermark: structuredClone(globalWatermark), use_global_nfo: true, nfo: structuredClone(globalNFO), use_global_providers: true, providers: { configs: structuredClone(globalProviderConfigs), priorities: structuredClone(globalPriorities.config) } }); mark(); renderRows(); list.lastElementChild?.querySelector('.watch-path')?.focus(); };
       $('#watch-reset').onclick = () => { reload(); toast('已撤销未保存的修改'); };
       $('#watch-save').onclick = async () => {
         const button = $('#watch-save'); button.disabled = true;
@@ -275,8 +287,10 @@ export async function watchSettings({ heading, toast, markDirty, clearDirty, rel
           const paths = new Set();
           for (const dir of draft.watch_dirs) {
             dir.path = dir.path.trim();
-            if (!/^(?:[a-zA-Z]:[\\/]|\\\\)/.test(dir.path)) throw Error('请为每个监控目录填写完整 Windows 路径');
-            const key = dir.path.toLowerCase().replace(/[\\/]+$/, '');
+            if (!isAbsolutePath(dir.path)) throw Error(absolutePathHint('监控目录'));
+            // Windows 路径不区分大小写，Linux 区分。
+            const trimmed = dir.path.replace(/[\\/]+$/, '') || dir.path;
+            const key = isWindows() ? trimmed.toLowerCase() : trimmed;
             if (paths.has(key)) throw Error('监控目录不能重复');
             paths.add(key);
           }

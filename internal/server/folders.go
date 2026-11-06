@@ -1,7 +1,6 @@
 package server
 
 import (
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,13 +11,10 @@ type folderItem struct {
 	Path string `json:"path"`
 }
 
+// listLocalFolders 列出程序所在电脑上的文件夹，供页面选择整理、监控等目录。
+// 程序默认只监听 127.0.0.1；用 -listen 开放到局域网后，远程打开的页面也可以浏览，
+// 因为能访问页面的人本来就能修改全部设置。这里只拦截其他网站发起的跨站请求。
 func (s *Server) listLocalFolders(w http.ResponseWriter, r *http.Request) {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	ip := net.ParseIP(host)
-	if err != nil || ip == nil || !ip.IsLoopback() {
-		fail(w, 403, "local_only", "只能在运行程序的电脑上浏览目录")
-		return
-	}
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
 		fail(w, 403, "invalid_origin", "只能从本地页面浏览目录")
 		return
@@ -47,7 +43,7 @@ func (s *Server) listLocalFolders(w http.ResponseWriter, r *http.Request) {
 	current := filepath.Clean(requested)
 	info, err := os.Stat(current)
 	if err != nil || !info.IsDir() {
-		fail(w, 404, "folder_not_found", "目录不存在或无法访问；SMB 共享请检查路径、连接和当前 Windows 用户权限")
+		fail(w, 404, "folder_not_found", "目录不存在或无法访问；网络共享请检查路径、连接，以及运行程序的用户是否有权限")
 		return
 	}
 	entries, err := os.ReadDir(current)

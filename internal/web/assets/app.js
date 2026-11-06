@@ -18,6 +18,7 @@ import { logsPage } from './logs.js';
 import { userSettings, applyUserProfile } from './user.js';
 import { embySettings } from './emby.js';
 import { overviewPage } from './overview.js';
+import { loadPlatform, platformName, isAbsolutePath, absolutePathHint } from './platform.js';
 
 const $ = (selector, parent = document) => parent.querySelector(selector);
 const main = $('#main');
@@ -206,7 +207,7 @@ const nfoLabels = {
   website: '网站',
 };
 const fieldHelp = {
-  target_folder: '例如 D:\\Media\\已整理',
+  target_folder: '完整的目录路径',
   file_size_filter: '小于此值的文件会被过滤，0 表示不限',
   max_actor_count: '0 表示不限',
   request_timeout: '单个请求最长等待时间，0 表示使用默认值 20 秒。',
@@ -813,7 +814,7 @@ async function settings() {
       heading('设置', '先配置媒体文件的整理方式。') +
       `<div class="settings-layout"><nav class="settings-nav"><a class="active" href="#/settings/common">整理</a><a href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a href="#/settings/watermark">水印</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a href="#/settings/user">用户</a></nav><form id="settings-form" class="panel">
         <div class="download-section-title"><h2>整理方式</h2></div>
-        <div class="field"><label class="field-label" for="organize-folder">整理目录<small>移动和 STRM 模式下的目标目录，点击按钮浏览 Windows 文件夹</small></label><div class="folder-control"><input id="organize-folder" type="text" value="${h(value.target_folder || '')}" placeholder="请选择目录" readonly><button class="button small" type="button" id="pick-organize-folder">选择目录…</button></div></div>
+        <div class="field"><label class="field-label" for="organize-folder">整理目录<small>移动和 STRM 模式下的目标目录，点击按钮浏览本机文件夹</small></label><div class="folder-control"><input id="organize-folder" type="text" value="${h(value.target_folder || '')}" placeholder="请选择目录" readonly><button class="button small" type="button" id="pick-organize-folder">选择目录…</button></div></div>
         <div class="field"><label class="field-label" for="organize-mode">整理模式<small id="organize-mode-help"></small></label><select id="organize-mode">${modes.map(([id, name]) => `<option value="${id}" ${Number(value.link_mode) === Number(id) ? 'selected' : ''}>${name}</option>`).join('')}</select></div>
         <div class="field mode-option" id="move-options"><label class="field-label" for="move-cleanup">移动后删除源文件夹<small>移动完成后，若原视频所在的源文件夹已没有任何文件，则删除该文件夹</small></label><input id="move-cleanup" type="checkbox" class="switch" ${value.delete_empty_parent_after_move ? 'checked' : ''}></div>
         <div class="field mode-option" id="cleanup-metadata-option"><label class="field-label" for="cleanup-metadata">刮削出错时删除元数据目录<small>用于移动模式；原地整理会自动清理本次未完成的输出文件</small></label><input id="cleanup-metadata" type="checkbox" class="switch" ${value.delete_metadata_folder_when_failed ? 'checked' : ''}></div>
@@ -833,7 +834,7 @@ async function settings() {
         <div class="field"><label class="field-label" for="other-hack-keywords-input">其他破解关键词<small>不属于 LTX、LADA、JAV 的破解版本；匹配文件名，不区分大小写。</small></label>${tagEditor('other-hack-keywords', 'other_hack_keywords', '其他破解关键词')}</div>
         <div class="field"><label class="field-label" for="uncensored-keywords-input">无码关键词<small>匹配文件名，不区分大小写。</small></label>${tagEditor('uncensored-keywords', 'uncensored_keywords', '无码关键词')}</div>
         <div class="savebar"><span id="save-status">所有修改均保存在本地</span><div><button class="button" type="button" id="reset-form">撤销修改</button> <button class="button primary" type="submit" id="save-form">保存设置</button></div></div></form></div>
-        <dialog id="folder-dialog" class="folder-dialog"><div class="folder-dialog-head"><h2>选择整理目录</h2><button class="icon-button" id="folder-close" type="button" aria-label="关闭">×</button></div><div class="folder-location"><button class="button small" id="folder-up" type="button">↑ 上一级</button><input id="folder-path" type="text" aria-label="目录路径" placeholder="磁盘或完整路径"><button class="button small" id="folder-go" type="button">转到</button></div><div id="folder-list" class="folder-list" role="list"></div><p id="folder-status" class="folder-status" role="status"></p><div class="folder-dialog-actions"><button class="button" id="folder-cancel" type="button">取消</button><button class="button primary" id="folder-select" type="button" disabled>选择此目录</button></div></dialog>`,
+        <dialog id="folder-dialog" class="folder-dialog"><div class="folder-dialog-head"><h2>选择整理目录</h2><button class="icon-button" id="folder-close" type="button" aria-label="关闭">×</button></div><div class="folder-location"><button class="button small" id="folder-up" type="button">↑ 上一级</button><input id="folder-path" type="text" aria-label="目录路径" placeholder="完整目录路径"><button class="button small" id="folder-go" type="button">转到</button></div><div id="folder-list" class="folder-list" role="list"></div><p id="folder-status" class="folder-status" role="status"></p><div class="folder-dialog-actions"><button class="button" id="folder-cancel" type="button">取消</button><button class="button primary" id="folder-select" type="button" disabled>选择此目录</button></div></dialog>`,
     bind() {
       const form = $('#settings-form');
       const mark = () => {
@@ -956,7 +957,7 @@ async function settings() {
             : '<div class="folder-empty">没有子文件夹</div>';
           $('#folder-status').textContent = folderState.truncated
             ? '文件夹较多，仅显示前 2000 个；可在上方输入完整路径。'
-            : folderState.path || '请选择磁盘';
+            : folderState.path || '请选择起始目录';
           $('#folder-list')
             .querySelectorAll('[data-folder-path]')
             .forEach((button) => (button.onclick = () => browse(button.dataset.folderPath)));
@@ -995,8 +996,8 @@ async function settings() {
         try {
           // 整理目录可以留空；开启目录监控时由后端检查是否可用。
           const folder = $('#organize-folder').value.trim();
-          if (folder && !/^(?:[a-zA-Z]:[\\/]|\\\\)/.test(folder))
-            throw Error('请选择有效的 Windows 整理目录');
+          if (folder && !isAbsolutePath(folder))
+            throw Error(absolutePathHint('整理目录'));
           const sizeMB = Number($('#min-file-size').value);
           const sizeBytes = Math.round(sizeMB * 1048576);
           if (!Number.isFinite(sizeMB) || sizeMB < 0 || !Number.isSafeInteger(sizeBytes))
@@ -1196,4 +1197,8 @@ $('#menu').onclick = () => $('#sidebar').classList.toggle('open');
 api('/api/config/user')
   .then(applyUserProfile)
   .catch(() => {});
-route();
+// 先读取运行平台（路径写法因系统而异），再渲染第一个页面。
+loadPlatform().then(() => {
+  $('#platform-name').textContent = `${platformName()} 本地版`;
+  route();
+});

@@ -330,12 +330,12 @@ func (s *Server) enqueueScrapeJobs(paths []string, directoryID string, settings 
 	active := make(map[string]bool)
 	for _, job := range s.jobs {
 		if job.Status == 0 || job.Status == 1 || job.Editing {
-			active[strings.ToLower(filepath.Clean(job.Path))] = true
+			active[pathKey(job.Path)] = true
 		}
 	}
 	ids := make([]string, 0, len(paths))
 	for _, path := range paths {
-		key := strings.ToLower(filepath.Clean(path))
+		key := pathKey(path)
 		if active[key] {
 			slog.Debug("[scrape] 跳过重复的文件", "path", path)
 			continue
@@ -1349,7 +1349,7 @@ func (s *Server) scrapeInPlace(ctx context.Context, path, override string, setti
 		return "", nil, err
 	}
 	traceScrape(ctx, "计算文件名", "目标文件："+newPath)
-	if settings.Common.LinkMode == 3 && !retryExisting && !strings.EqualFold(newPath, path) {
+	if settings.Common.LinkMode == 3 && !retryExisting && pathKey(newPath) != pathKey(path) {
 		if _, err := os.Lstat(newPath); err == nil {
 			return "", nil, errors.New("目标视频文件已存在：" + newPath)
 		} else if !errors.Is(err, os.ErrNotExist) {

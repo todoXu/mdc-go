@@ -2,6 +2,8 @@
 # go build 生成的程序
 /mdc-go.exe
 /bin/
+# tools/build.ps1 生成的单文件程序
+/dist/
 *.exe
 # tools/package_windows.py 生成的发布包和校验文件
 /mdc-go-windows-x64.zip

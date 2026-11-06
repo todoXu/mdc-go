@@ -14,6 +14,35 @@ var retrySubtitleExtensions = map[string]bool{
 	".vtt": true,
 }
 
+// removeRetryProducts 在重试前删除记录上一次刮削的产物，按记录上一次使用的整理模式找产物：
+//   - 移动、原地整理：产物在视频旁边，path 就是那个视频。
+//   - STRM：产物（.strm、NFO、图片、预告片）在整理目录，与 .strm 同一文件夹；源视频所在的监控目录里
+//     没有本程序写的文件，不能清理那里，否则会删掉监控目录里用户自己的文件。
+//
+// 本次改用其它整理模式时也按上一次的模式清理，旧的 .strm 不会留在整理目录里。
+func removeRetryProducts(job *scrapeJob, path string, settings scrapeSettings) ([]string, error) {
+	if job.LinkMode != linkModeSTRM {
+		return removeScrapeProducts(path, settings)
+	}
+	if job.Output == "" || !strings.EqualFold(filepath.Ext(job.Output), ".strm") {
+		// 上一次没有写出 .strm（例如刮削失败），整理目录里没有它的产物。
+		return []string{}, nil
+	}
+	removed, err := removeScrapeProducts(job.Output, settings)
+	if err != nil {
+		return removed, err
+	}
+	if fileExists(job.Output) {
+		if err := os.Remove(job.Output); err != nil {
+			return removed, fmt.Errorf("删除旧的 STRM 文件 %s：%w", job.Output, err)
+		}
+		removed = append(removed, filepath.Base(job.Output))
+	}
+	// 文件夹是整理时创建的，清空后一并删除；os.Remove 不会删除非空目录。
+	_ = os.Remove(filepath.Dir(job.Output))
+	return removed, nil
+}
+
 func removeScrapeProducts(path string, settings scrapeSettings) ([]string, error) {
 	if path == "" || filepath.Dir(path) == path {
 		return nil, fmt.Errorf("无效的视频路径")
@@ -70,13 +99,4 @@ func isRetryTrailerProduct(name string) bool {
 		}
 	}
 	return false
-}
-
-func samePath(a, b string) bool {
-	aa, errA := filepath.Abs(a)
-	bb, errB := filepath.Abs(b)
-	if errA != nil || errB != nil {
-		return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
-	}
-	return strings.EqualFold(filepath.Clean(aa), filepath.Clean(bb))
 }

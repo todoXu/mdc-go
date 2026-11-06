@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -17,6 +16,27 @@ const (
 	linkModeInPlace = 3
 	linkModeSTRM    = 4
 )
+
+var linkModeNames = map[int]string{linkModeMove: "移动", linkModeInPlace: "原地整理", linkModeSTRM: "STRM"}
+
+func linkModeName(mode int) string {
+	if name, ok := linkModeNames[mode]; ok {
+		return name
+	}
+	return fmt.Sprintf("模式 %d", mode)
+}
+
+// linkModeChangeError 检查已成功整理的记录能否按当前设置再次处理（重新刮削、重新整理）。
+// 整理方式改变后，文件已经按旧方式放好（例如移动后视频已在整理目录，再改成 STRM 会让
+// .strm 指向整理目录里的视频），所以只要方式不同就拒绝。未成功的记录还没整理，不受限制。
+func linkModeChangeError(job scrapeJob, current int) error {
+	if job.Status != 2 || job.LinkMode == 0 || job.LinkMode == current {
+		return nil
+	}
+	return fmt.Errorf("这条记录已按「%s」整理，当前设置是「%s」，整理方式不同，不能再次整理。"+
+		"请把监控目录的整理方式改回「%s」；如果确实要换方式，请先删除这条记录（可同时删除媒体数据），把视频放回监控目录后重新扫描",
+		linkModeName(job.LinkMode), linkModeName(current), linkModeName(job.LinkMode))
+}
 
 // supportedLinkMode 表示该模式已经实现，可用于手动刮削、重新整理和监控目录。
 func supportedLinkMode(mode int) bool {
@@ -43,7 +63,7 @@ func applyStrmPathMap(source, from, to string) string {
 		return source
 	}
 	head := source[:len(from)]
-	if runtime.GOOS == "windows" {
+	if pathsCaseInsensitive {
 		if !strings.EqualFold(head, from) {
 			return source
 		}

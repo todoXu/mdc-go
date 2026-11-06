@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -202,7 +203,8 @@ func (s *Server) routes() {
 		writeJSON(w, 200, object{"status": "ok", "implementation": "go-native"})
 	})
 	s.mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, object{"version": Version})
+		// os 供页面显示运行平台、选择路径分隔符：windows、linux 等（与 Go 的 runtime.GOOS 一致）。
+		writeJSON(w, 200, object{"version": Version, "os": runtime.GOOS})
 	})
 	s.mux.HandleFunc("GET /api/config/{section}", s.getConfig)
 	s.mux.HandleFunc("PUT /api/config/{section}", s.putConfig)

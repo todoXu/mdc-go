@@ -1,4 +1,5 @@
 import { api, escapeHTML as h } from './api.js';
+import { pathSeparator } from './platform.js';
 
 const mosaicTypes = [
   ['is_ltx_hack', 'LTX破解'], ['is_lada_hack', 'LADA破解'],
@@ -106,7 +107,9 @@ function preview(config, form) {
   };
   const apply = (template, data) => String(template || '').replace(/\{([a-z_]+)\}/g, (_, key) => data[key] ?? `{${key}}`);
   const folder = apply(config.folder, sample);
-  const folderPath = folder.replace(/[\\/]+/g, '\\').replace(/\\+$/, '');
+  // 预览按程序运行所在系统的分隔符显示路径。
+  const separator = pathSeparator();
+  const folderPath = folder.replace(/[\\/]+/g, separator).replace(/[\\/]+$/, '');
   const mediaTitle = apply(config.title, sample);
   const body = apply(config.file, sample);
   const mosaicSuffix = config.suffixs[value('mosaic')] || '';
@@ -119,7 +122,7 @@ function preview(config, form) {
   });
   const videoStem = body + suffix + part;
   const videoName = videoStem + '.mp4';
-  const relativePath = [folderPath, videoName].filter(Boolean).join('\\');
+  const relativePath = [folderPath, videoName].filter(Boolean).join(separator);
   const shown = (token, value) => suffixTemplate.includes(`{${token}}`) ? value || '（无）' : '后缀模板未使用此项';
   const outputs = [
     ['整理后目录', folderPath || '（原目录）'], ['Emby/Plex 标题', mediaTitle || '（空）'],

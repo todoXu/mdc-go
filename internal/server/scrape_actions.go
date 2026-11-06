@@ -319,6 +319,11 @@ func (s *Server) scrapeJobAction(w http.ResponseWriter, r *http.Request) {
 			fail(w, 409, "invalid_status", "仅可重新整理已成功的记录")
 			return
 		}
+		if err := linkModeChangeError(*job, settings.Common.LinkMode); err != nil {
+			s.jobsMu.Unlock()
+			fail(w, 409, "link_mode_changed", err.Error())
+			return
+		}
 		path := job.Path
 		// 移动模式的源视频已经移走，重试和重新整理要以输出文件为准。
 		// STRM 模式的源视频仍在原位，必须继续使用源路径，否则会把 .strm 当成源文件。
@@ -326,7 +331,7 @@ func (s *Server) scrapeJobAction(w http.ResponseWriter, r *http.Request) {
 			path = job.Output
 		}
 		for _, other := range s.jobs {
-			if (other.Status == 0 || other.Status == 1 || other.Editing) && strings.EqualFold(filepath.Clean(other.Path), filepath.Clean(path)) {
+			if (other.Status == 0 || other.Status == 1 || other.Editing) && pathKey(other.Path) == pathKey(path) {
 				s.jobsMu.Unlock()
 				fail(w, 409, "job_active", "该文件已有等待或处理中的记录")
 				return
@@ -335,7 +340,7 @@ func (s *Server) scrapeJobAction(w http.ResponseWriter, r *http.Request) {
 		removed := []string{}
 		if action == "retry" {
 			var cleanupErr error
-			removed, cleanupErr = removeScrapeProducts(path, settings)
+			removed, cleanupErr = removeRetryProducts(job, path, settings)
 			if cleanupErr != nil {
 				s.jobsMu.Unlock()
 				slog.Warn("[scrape] 重试前清理旧产物失败", "id", job.ID, "path", path, "error", cleanupErr)

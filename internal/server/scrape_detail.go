@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -171,7 +170,7 @@ func (files directoryFiles) lookup(path string) os.FileInfo {
 	if info, ok := files.exact[name]; ok {
 		return info
 	}
-	if runtime.GOOS == "windows" {
+	if pathsCaseInsensitive {
 		return files.fold[strings.ToLower(name)]
 	}
 	return nil

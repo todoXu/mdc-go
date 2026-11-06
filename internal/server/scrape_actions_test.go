@@ -225,3 +225,104 @@ func TestReorganizeExistingMovesSidecarsAndRejectsCollision(t *testing.T) {
 		t.Fatal("record deletion deleted video")
 	}
 }
+
+// STRM 记录改用移动模式重试：旧的 .strm、NFO、图片在整理目录里被清理；
+// 源视频所在的监控目录里用户自己的文件不能被删。
+func TestRetrySTRMRecordCleansOutputFolderNotWatchFolder(t *testing.T) {
+	s := configureScrapeServer(t)
+	settings, err := s.scrapeSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	watch := t.TempDir()
+	source := filepath.Join(watch, "ABP-123.mp4")
+	userFile := filepath.Join(watch, "readme.txt")
+	output := filepath.Join(t.TempDir(), "Actor", "ABP-123", "ABP-123.strm")
+	base := strings.TrimSuffix(output, ".strm")
+	if err := os.MkdirAll(filepath.Dir(output), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string]string{source: "video", userFile: "mine", output: source, base + ".nfo": "nfo", base + "-poster.jpg": "poster"} {
+		if err := os.WriteFile(name, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job := &scrapeJob{ID: "strm", Status: 2, Path: source, Output: output, LinkMode: linkModeSTRM}
+	removed, err := removeRetryProducts(job, source, settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 3 {
+		t.Fatalf("removed %v", removed)
+	}
+	if _, err := os.Stat(filepath.Dir(output)); !os.IsNotExist(err) {
+		t.Fatal("empty output folder kept")
+	}
+	for _, keep := range []string{source, userFile} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Fatalf("watch folder file removed: %s", keep)
+		}
+	}
+	// 上一次失败、没有 .strm 时什么都不删。
+	failed := &scrapeJob{ID: "failed", Status: -1, Path: source, LinkMode: linkModeSTRM}
+	if removed, err := removeRetryProducts(failed, source, settings); err != nil || len(removed) != 0 {
+		t.Fatalf("failed strm retry removed %v %v", removed, err)
+	}
+	if _, err := os.Stat(userFile); err != nil {
+		t.Fatal("watch folder file removed on failed retry")
+	}
+}
+
+// 已成功整理的记录：监控目录的整理方式改变后，重新刮削和重新整理都被拒绝，文件保持不动；
+// 改回原来的方式后可以正常处理。未成功的记录不受限制。
+func TestRecordActionsRejectChangedLinkMode(t *testing.T) {
+	s := configureScrapeServer(t)
+	target := t.TempDir()
+	watch := t.TempDir()
+	source := filepath.Join(watch, "ABP-123.mp4")
+	output := filepath.Join(target, "ABP-123.strm")
+	for name, data := range map[string]string{source: "video", output: source} {
+		if err := os.WriteFile(name, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setMode := func(mode int) {
+		t.Helper()
+		body, _ := json.Marshal(object{"link_mode": mode, "target_folder": target})
+		if w := call(s, "PUT", "/api/config/common", string(body)); w.Code != 200 {
+			t.Fatal(w.Body.String())
+		}
+	}
+	settings, _ := s.scrapeSettings()
+	s.jobsMu.Lock()
+	s.jobs = []scrapeJob{
+		{ID: "done", Status: 2, Path: source, Output: output, Number: "ABP-123", LinkMode: linkModeSTRM, Settings: &settings, Metadata: &provider.Metadata{Number: "ABP-123", Title: "T"}},
+		{ID: "failed", Status: -1, Path: filepath.Join(watch, "ABP-124.mp4"), Number: "ABP-124", LinkMode: linkModeSTRM, Settings: &settings},
+	}
+	s.jobsMu.Unlock()
+
+	setMode(linkModeMove)
+	for _, action := range []string{"retry", "reorganize"} {
+		w := call(s, "POST", "/api/scrape/jobs/done/"+action, "")
+		if w.Code != 409 || !strings.Contains(w.Body.String(), "link_mode_changed") || !strings.Contains(w.Body.String(), "STRM") {
+			t.Fatalf("%s with changed mode: %d %s", action, w.Code, w.Body.String())
+		}
+	}
+	if _, err := os.Stat(output); err != nil {
+		t.Fatal("rejected retry still removed the old strm")
+	}
+	// 修改元数据中的命名字段会触发重新整理，同样被拒绝。
+	edit := `{"fields":{"title":"New title"}}`
+	if w := call(s, "PUT", "/api/scrape/jobs/done/metadata", edit); w.Code != 409 || !strings.Contains(w.Body.String(), "link_mode_changed") {
+		t.Fatalf("metadata edit with changed mode: %d %s", w.Code, w.Body.String())
+	}
+	// 失败的记录还没整理，可以按新方式重新刮削。
+	if w := call(s, "POST", "/api/scrape/jobs/failed/retry", ""); w.Code == 409 && strings.Contains(w.Body.String(), "link_mode_changed") {
+		t.Fatalf("failed record rejected: %s", w.Body.String())
+	}
+	// 改回原来的方式后，不再因为整理方式被拒绝。
+	setMode(linkModeSTRM)
+	if w := call(s, "POST", "/api/scrape/jobs/done/reorganize", ""); strings.Contains(w.Body.String(), "link_mode_changed") {
+		t.Fatalf("same mode rejected: %d %s", w.Code, w.Body.String())
+	}
+}

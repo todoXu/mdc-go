@@ -107,7 +107,7 @@ func validateWatchConfig(raw json.RawMessage) error {
 		if !filepath.IsAbs(dir.Path) {
 			return fmt.Errorf("监控路径必须是完整路径: %s", dir.Path)
 		}
-		clean := strings.ToLower(filepath.Clean(dir.Path))
+		clean := pathKey(dir.Path)
 		if seenPaths[clean] {
 			return fmt.Errorf("监控路径重复: %s", dir.Path)
 		}
@@ -295,17 +295,17 @@ func useGlobalConfigValue(value *bool) bool {
 }
 
 func (s *Server) alreadyOrganized(path string) bool {
-	target := filepath.Clean(path)
+	target := pathKey(path)
 	s.jobsMu.RLock()
 	defer s.jobsMu.RUnlock()
 	// 数据库中只要存在该视频的记录（无论成功、失败或终止）就不再自动入队；
 	// 之后是重试还是删除记录由用户决定。STRM 模式下源视频保持原位，所以按源路径比对；
 	// 移动和原地整理的输出路径也一并比对。
 	for _, job := range s.jobs {
-		if job.Path != "" && strings.EqualFold(filepath.Clean(job.Path), target) {
+		if job.Path != "" && pathKey(job.Path) == target {
 			return true
 		}
-		if job.Output != "" && strings.EqualFold(filepath.Clean(job.Output), target) {
+		if job.Output != "" && pathKey(job.Output) == target {
 			return true
 		}
 	}

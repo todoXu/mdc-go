@@ -270,7 +270,7 @@ func commitMove(ctx context.Context, source, target string, writes map[string][]
 
 	targets := map[string]bool{}
 	for _, move := range moves {
-		key := strings.ToLower(filepath.Clean(move.target))
+		key := pathKey(move.target)
 		if targets[key] {
 			return fmt.Errorf("目标路径重复：%s", move.target)
 		}

@@ -71,7 +71,7 @@ func (s *Server) reserveRecord(id string) (scrapeJob, error) {
 			return scrapeJob{}, errors.New("记录尚无元数据")
 		}
 		for _, other := range s.jobs {
-			if other.ID != id && (other.Status == 0 || other.Status == 1 || other.Editing) && strings.EqualFold(filepath.Clean(other.Path), filepath.Clean(job.Path)) {
+			if other.ID != id && (other.Status == 0 || other.Status == 1 || other.Editing) && pathKey(other.Path) == pathKey(job.Path) {
 				return scrapeJob{}, errors.New("该文件正在处理")
 			}
 		}
@@ -200,6 +200,11 @@ func (s *Server) editScrapeMetadata(w http.ResponseWriter, r *http.Request) {
 	namingChanged := changed["actors"] || changed["number"] || changed["title"] || changed["release"] || changed["studio"] || changed["publisher"] || changed["series"]
 	autoReorganize := namingChanged && job.Status == 2 && output != ""
 	if autoReorganize {
+		// 命名字段变化会触发重新整理；整理方式已改变时不能重新整理，直接拒绝这次修改。
+		if err := linkModeChangeError(job, settings.Common.LinkMode); err != nil {
+			fail(w, 409, "link_mode_changed", err.Error())
+			return
+		}
 		// 保存时就检查目标是否可用，避免接口返回成功后，后台整理才因冲突失败。
 		target, err := plannedMediaTarget(output, meta, settings)
 		if err != nil {
