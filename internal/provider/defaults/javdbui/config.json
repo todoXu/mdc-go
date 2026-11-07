@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "base_url": "https://catembylegacy.fastcdn.dpdns.org",
+  "cookies": "",
+  "user_agent": "",
+  "proxy": "",
+  "cooldown_seconds": 0,
+  "request_timeout": 30,
+  "trailer_timeout": 0,
+  "retry_times": 0,
+  "options": {}
+}

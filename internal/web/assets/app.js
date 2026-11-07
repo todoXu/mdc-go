@@ -773,14 +773,20 @@ async function providerEdit(name) {
           const rows = [
             ['番号', result.number],
             ['标题', result.title],
+            ['原始标题', result.original_title],
             ['发行日期', result.release],
             ['时长', result.runtime],
+            ['评分', result.rating],
             ['导演', result.director],
             ['制作商', result.studio],
             ['发行商', result.publisher],
             ['系列', result.series],
-            ['演员', (result.actors || []).join('、')],
+            // 男女演员分开列：male_actors 缺省时按空数组处理，其它插件不返回也不会出错。
+            ['女演员', (result.actors || []).join('、')],
+            ['男演员', (result.male_actors || []).join('、')],
             ['标签', (result.tags || []).join('、')],
+            ['简介', result.outline],
+            ['预告片', result.trailer],
           ];
           $('#source-result').innerHTML =
             `<div class="metadata-result">${rows.map(([key, value]) => `<div><span>${h(key)}</span><b>${h(value || '—')}</b></div>`).join('')}<div class="metadata-images"><h3>封面</h3>${imageGallery(result.cover, '封面', result.image_previews)}</div><div class="metadata-images"><h3>剧照</h3>${imageGallery(result.samples, '剧照', result.image_previews)}</div><a class="button small" href="${h(result.source_url)}" target="_blank" rel="noopener noreferrer">打开来源页面 ↗</a></div>`;

@@ -2,7 +2,7 @@
   "api_version": 2,
   "id": "javdb",
   "name": "javdb",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "engine": "javascript-v1",
   "base_url": "https://javdb.com",
   "input_hint": "SSIS-001 或 javdb 作品链接（需先在数据源配置中填写 Cookies）"

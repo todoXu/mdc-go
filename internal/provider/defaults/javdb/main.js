@@ -55,6 +55,13 @@ function locate(input) {
   if (paths.length > 1) fail("ambiguous_number", "存在多个同番号作品，请直接输入作品详情链接");
   return {number: number, path: paths[0]};
 }
+// 评分行形如：<strong>評分:</strong> <span class="value">…&nbsp;4.5分, 由1893人評價</span>。
+// 只取前面的分数，评价人数里的数字不能拼进去。
+function score(page) {
+  var value = labeled(page, ["評分", "评分", "Rating"]);
+  var hit = String(value || "").match(/\d+(?:\.\d+)?/);
+  return hit ? hit[0] : "";
+}
 var plugin = {
   test: function() {
     var page = host.request(base() + "/", {}); check(page);
@@ -79,6 +86,7 @@ var plugin = {
       trailer: trailerNode ? host.resolve(page.url, trailerNode.attrs.src || trailerNode.attrs.content || "") : "",
       release: labeled(page, ["日期", "Released Date", "Released"]).replace(/\//g, "-"),
       runtime: labeled(page, ["時長", "时长", "Duration"]).replace(/\D+/g, ""),
+      rating: score(page),
       director: labeled(page, ["導演", "导演", "Director"]),
       studio: labeled(page, ["片商", "Maker"]),
       publisher: labeled(page, ["發行", "发行", "Publisher"]),

@@ -323,6 +323,22 @@ func (p *scriptSource) request(ctx context.Context, c Config, address string, op
 		acceptLanguage = requested
 	}
 	req.Header.Set("Accept-Language", acceptLanguage)
+	if extra, ok := opts["headers"].(map[string]any); ok {
+		for name, raw := range extra {
+			value, ok := raw.(string)
+			if !ok || name == "" {
+				continue
+			}
+			if strings.ContainsAny(name, " \t\r\n:") || strings.ContainsAny(value, "\r\n") {
+				return nil, issue("invalid_config", "插件请求头无效")
+			}
+			switch strings.ToLower(name) {
+			case "host", "content-length", "cookie", "user-agent", "accept-language":
+				continue
+			}
+			req.Header.Set(name, value)
+		}
+	}
 	if binary {
 		req.Header.Set("Accept", "image/avif,image/webp,image/png,image/jpeg,image/gif,*/*;q=0.5")
 	}

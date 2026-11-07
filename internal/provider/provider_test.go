@@ -91,7 +91,8 @@ func TestPluginsReloadAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := r.List()
-	if err != nil || len(items) != 4 {
+	// 内置插件：Javbus、avbase、javdb、javdbui，外加上面手工创建的 Example。
+	if err != nil || len(items) != 5 {
 		t.Fatal(items, err)
 	}
 	m.Engine = "html-v1"
