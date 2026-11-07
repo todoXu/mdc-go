@@ -9,6 +9,16 @@ const sources = { watcher: '监控', retry: '重试', reorganize: '重新整理'
 // 每页条数可在页面上选择，选择结果在本次打开期间保留。
 let pageSize = 10;
 
+// 刷新或关闭页面时记下列表滚动位置，重新打开同一地址后滚回去。
+// 只记录列表页，其它页面不受影响；翻页本身由 goToPage 主动回到顶部。
+if (!window.recordsRefreshBound) {
+  window.recordsRefreshBound = true;
+  window.addEventListener('pagehide', () => {
+    if (!document.querySelector('#record-rows, #record-grid')) return;
+    sessionStorage.setItem(`records-refresh:${location.hash}`, String(window.scrollY));
+  });
+}
+
 function dateLabel(value) {
   if (!value) return '—';
   const date = new Date(value);
@@ -84,7 +94,7 @@ function modeLabel(row) {
 
 export function recordsTableHTML() {
   return `<section class="panel record-detail">
-    <div class="record-selection" id="record-selection"><span class="record-selection-count"></span><button type="button" class="record-select-btn" id="record-select-filtered">全选</button><div class="record-selection-actions"><button type="button" class="button small" data-bulk-action="stop">停止</button><button type="button" class="button small" data-bulk-action="retry">重新刮削</button><button type="button" class="button small danger" data-bulk-action="delete">删除</button></div></div>
+    <div class="record-selection" id="record-selection"><span class="record-selection-count"></span><button type="button" class="record-select-btn" id="record-select-filtered">全选</button><button type="button" class="record-select-btn" id="record-select-page" hidden>全选本页</button><div class="record-selection-actions"><button type="button" class="button small" data-bulk-action="stop">停止</button><button type="button" class="button small" data-bulk-action="retry">重新刮削</button><button type="button" class="button small danger" data-bulk-action="delete">删除</button></div></div>
     <div class="table-wrap">
       <table class="records-table">
         <thead>
@@ -247,16 +257,38 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
       sessionStorage.setItem(scrollKey(location.hash), String(window.scrollY));
     }, true);
   }
-  // 浏览器默认会在刷新时恢复滚动位置；关闭它，刷新后从顶部开始，只由本页自己恢复。
+  // 浏览器默认的滚动恢复会与自定义逻辑打架：关掉它，刷新和返回列表都由本页自己恢复位置。
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   const restoreScroll = () => {
     // 保存的位置只使用一次：恢复后立即清除，之后刷新或从其他页面进入列表都不会再跳转。
     const key = scrollKey(location.hash);
     const saved = Number(sessionStorage.getItem(key));
     sessionStorage.removeItem(key);
-    if (!hashQuery().has('page') || !(saved > 0)) return;
+    if (!hashQuery().has('page') || !(saved > 0)) return false;
     // 路由渲染完成后会把页面滚到顶部，所以要等到这一步之后再恢复。
     setTimeout(() => window.scrollTo(0, saved), 0);
+    return true;
+  };
+  // 刷新页面后恢复滚动位置。海报是懒加载的，图片没加载完时页面高度不够、滚动会被截断，
+  // 所以隔一小段时间重试，直到到位或超时；用户一滚动就停止，不抢滚动条。
+  const restoreRefreshScroll = () => {
+    const key = `records-refresh:${location.hash}`;
+    const target = Number(sessionStorage.getItem(key));
+    sessionStorage.removeItem(key);
+    if (!(target > 0)) return;
+    let tries = 0;
+    let stopped = false;
+    const stop = () => { stopped = true; };
+    window.addEventListener('wheel', stop, { once: true, passive: true });
+    window.addEventListener('touchmove', stop, { once: true, passive: true });
+    window.addEventListener('keydown', stop, { once: true });
+    const attempt = () => {
+      if (stopped) return;
+      window.scrollTo(0, target);
+      if (Math.abs(window.scrollY - target) > 2 && tries++ < 20) setTimeout(attempt, 100);
+    };
+    // 路由渲染完会把页面滚到顶部，等这一步之后再恢复。
+    setTimeout(attempt, 0);
   };
   // 详情页沿用列表当前的状态筛选和搜索，用于计算上一条、下一条。
   const detailURL = (row) => {
@@ -382,6 +414,13 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
       };
     });
   };
+  // 翻页后回到页面顶部，方便从第一行开始查看。
+  const goToPage = (next) => {
+    if (next === page) return;
+    page = next;
+    render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   const render = () => {
     const search = $('#task-search').value.trim().toLowerCase();
     const statuses = statusTabs[filter] || statusTabs.all;
@@ -395,7 +434,7 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
     if (selectFiltered) {
       const allSelected = filtered.length > 0 && filtered.every((row) => selected.has(row.id));
       selectFiltered.disabled = !filtered.length;
-      selectFiltered.textContent = allSelected ? '取消全选' : `全选（${filtered.length}）`;
+      selectFiltered.textContent = allSelected ? '取消全选' : `全选全部（${filtered.length}）`;
       selectFiltered.title = allSelected ? '取消选择当前筛选出的全部记录' : `选择当前筛选出的全部 ${filtered.length} 条记录（不限于当前页）`;
       selectFiltered.onclick = () => {
         filtered.forEach((row) => (allSelected ? selected.delete(row.id) : selected.add(row.id)));
@@ -473,7 +512,7 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
       ? '<span class="record-page-gap">…</span>'
       : `<button type="button" class="record-page-num${n === page ? ' active' : ''}" data-page="${n}" ${n === page ? 'aria-current="page"' : ''}>${n}</button>`).join('');
     $('#record-page').querySelectorAll('[data-page]').forEach((button) => {
-      button.onclick = () => { page = Number(button.dataset.page); render(); };
+      button.onclick = () => goToPage(Number(button.dataset.page));
     });
     $('#record-page-input').dataset.pages = String(pages);
     $('#record-page-input').placeholder = `1–${pages}`;
@@ -487,6 +526,11 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
       $('#record-select-all').checked = count > 0 && count === visible.length;
       $('#record-select-all').indeterminate = count > 0 && count < visible.length;
       $('#record-select-all').disabled = !visible.length;
+      // 海报模式看不到表头的全选框，在操作栏里补一个「全选本页」。
+      const pageButton = $('#record-select-page');
+      pageButton.hidden = !poster;
+      pageButton.disabled = !visible.length;
+      pageButton.textContent = count > 0 && count === visible.length ? '取消本页' : `全选本页（${visible.length}）`;
       $('#record-selection .record-selection-count').textContent = `已选择 ${selected.size} 条记录`;
       $('#record-selection').querySelectorAll('[data-bulk-action]').forEach((button) => {
         const action = button.dataset.bulkAction;
@@ -502,6 +546,11 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
     });
     $('#record-select-all').onchange = (event) => {
       visible.forEach((row) => { if (event.target.checked) selected.add(row.id); else selected.delete(row.id); });
+      render();
+    };
+    $('#record-select-page').onclick = () => {
+      const all = visible.length > 0 && visible.every((row) => selected.has(row.id));
+      visible.forEach((row) => { if (all) selected.delete(row.id); else selected.add(row.id); });
       render();
     };
     selectionChanged();
@@ -544,19 +593,18 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
     const input = $('#record-page-input');
     const target = Math.round(Number(input.value.trim()));
     if (!input.value.trim() || !Number.isFinite(target)) { input.value = ''; return; }
-    page = Math.max(1, Math.min(Number(input.dataset.pages) || 1, target));
     input.value = '';
-    render();
+    goToPage(Math.max(1, Math.min(Number(input.dataset.pages) || 1, target)));
   };
-  $('#record-prev').onclick = () => { page--; render(); };
-  $('#record-next').onclick = () => { page++; render(); };
+  $('#record-prev').onclick = () => goToPage(page - 1);
+  $('#record-next').onclick = () => goToPage(page + 1);
   $('#record-page-size').onchange = (event) => {
     pageSize = Number(event.target.value);
     page = 1;
     render();
   };
   render();
-  restoreScroll();
+  if (!restoreScroll()) restoreRefreshScroll();
   // 推送到来时只更新表格行，不重建整个页面；分页、选择和搜索状态都保留。
   return {
     update(next) {

@@ -2810,8 +2810,10 @@ label:has(input[type='radio']:not(:disabled)),
 .poster-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px #1d2b4a1f; }
 .poster-card.selected { border-color: var(--blue); box-shadow: 0 0 0 2px #3f6fd833; }
 .poster-card.running { border-color: #c9d7f5; }
-.poster-pic { position: relative; aspect-ratio: 2 / 3; background: #eef1f6; overflow: hidden; }
-.poster-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* 海报框跟随图片自身比例，不裁切；没有海报时按 2:3 占位 */
+.poster-pic { position: relative; background: #eef1f6; overflow: hidden; }
+.poster-pic:has(.poster-ph) { aspect-ratio: 2 / 3; }
+.poster-pic img { display: block; width: 100%; height: auto; }
 .poster-ph { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 18px; text-align: center; color: #b4bcc8; }
 .poster-ph b { font-size: 20px; letter-spacing: .5px; overflow-wrap: anywhere; }
 .poster-ph span { font-size: 12.5px; line-height: 1.55; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }

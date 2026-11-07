@@ -106,7 +106,11 @@ func applyWatermarks(ctx context.Context, data []byte, ext, kind string, flags f
 	if scale < 1 || scale > 100 {
 		return nil, fmt.Errorf("水印缩放倍率应为 1～100")
 	}
-	ox, oy, gap := int(watermarkNumber(config, "offset_x", 0)), int(watermarkNumber(config, "offset_y", 0)), int(watermarkNumber(config, "gap", 0))
+
+	ox := int(math.Round(watermarkNumber(config, "offset_x", 0) / 1000 * float64(width)))
+	oy := int(math.Round(watermarkNumber(config, "offset_y", 0) / 1000 * float64(height)))
+	gap := int(math.Round(watermarkNumber(config, "gap", 0)))
+
 	if ox < 0 || oy < 0 || gap < 0 || ox >= width || oy >= height {
 		return nil, fmt.Errorf("水印偏移或间距无效")
 	}
