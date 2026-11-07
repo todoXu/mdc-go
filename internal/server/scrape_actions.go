@@ -236,44 +236,10 @@ func (s *Server) scrapeJobAction(w http.ResponseWriter, r *http.Request) {
 	}
 	var settings scrapeSettings
 	if action == "reorganize" || action == "retry" {
-		var err error
-		settings, err = s.scrapeSettings()
-		s.jobsMu.RLock()
-		directoryID := ""
-		for _, job := range s.jobs {
-			if job.ID == r.PathValue("id") {
-				directoryID = job.DirectoryID
-				break
-			}
-		}
-		s.jobsMu.RUnlock()
-		for _, directory := range s.currentWatchConfig().Directories {
-			if directory.ID == directoryID {
-				settings, err = s.scrapeSettingsForDirectory(directory)
-				break
-			}
-		}
-		if err != nil {
-			fail(w, 500, "config_error", "无法读取整理配置")
-			return
-		}
-		settings.FlagsOverride = request.Flags
-		if request.URL != "" {
-			if err := s.resolveTaskURL(&settings, request.URL); err != nil {
-				fail(w, 400, "invalid_url", err.Error())
-				return
-			}
-			if request.Number == "" {
-				request.Number = detectNumber(request.URL)
-			}
-		}
-		settings.OverrideNumber = request.Number
-		if !supportedLinkMode(settings.Common.LinkMode) {
-			fail(w, 409, "unsupported_mode", "当前只支持移动、原地整理和 STRM 模式")
-			return
-		}
-		if usesTargetFolder(settings.Common.LinkMode) && (!filepath.IsAbs(settings.Common.TargetFolder) || strings.TrimSpace(settings.Common.TargetFolder) == "") {
-			fail(w, 409, "target_folder_required", "移动和 STRM 模式需要先设置完整的整理目录")
+		var failure *actionError
+		settings, failure = s.actionSettings(r.PathValue("id"), &request)
+		if failure != nil {
+			fail(w, failure.status, failure.code, failure.message)
 			return
 		}
 	}
@@ -283,12 +249,24 @@ func (s *Server) scrapeJobAction(w http.ResponseWriter, r *http.Request) {
 		if job.ID != r.PathValue("id") {
 			continue
 		}
+		if action != "stop" {
+			failure := s.requeueJobLocked(job, action, request, r.ContentLength != 0, settings)
+			s.jobsMu.Unlock()
+			if failure != nil {
+				fail(w, failure.status, failure.code, failure.message)
+				return
+			}
+			s.saveScrapeHistory()
+			s.startScrapeJobs([]string{r.PathValue("id")})
+			writeJSON(w, 202, object{"success": true, "id": r.PathValue("id")})
+			return
+		}
 		if job.Editing {
 			s.jobsMu.Unlock()
 			fail(w, 409, "job_active", "记录正在更新，请稍后重试")
 			return
 		}
-		if action == "stop" {
+		{
 			if job.Status != 0 && job.Status != 1 {
 				s.jobsMu.Unlock()
 				fail(w, 409, "job_finished", "记录已结束")
@@ -309,86 +287,193 @@ func (s *Server) scrapeJobAction(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 202, object{"success": true})
 			return
 		}
-		if action == "retry" && job.Status != 2 && job.Status != -1 && job.Status != -2 {
-			s.jobsMu.Unlock()
-			fail(w, 409, "invalid_status", "仅可重试已结束的记录")
-			return
-		}
-		if action == "reorganize" && job.Status != 2 {
-			s.jobsMu.Unlock()
-			fail(w, 409, "invalid_status", "仅可重新整理已成功的记录")
-			return
-		}
-		if err := linkModeChangeError(*job, settings.Common.LinkMode); err != nil {
-			s.jobsMu.Unlock()
-			fail(w, 409, "link_mode_changed", err.Error())
-			return
-		}
-		path := job.Path
-		// 移动模式的源视频已经移走，重试和重新整理要以输出文件为准。
-		// STRM 模式的源视频仍在原位，必须继续使用源路径，否则会把 .strm 当成源文件。
-		if job.LinkMode != linkModeSTRM && (action == "reorganize" || (action == "retry" && job.Output != "")) {
-			path = job.Output
-		}
-		for _, other := range s.jobs {
-			if (other.Status == 0 || other.Status == 1 || other.Editing) && pathKey(other.Path) == pathKey(path) {
-				s.jobsMu.Unlock()
-				fail(w, 409, "job_active", "该文件已有等待或处理中的记录")
-				return
-			}
-		}
-		removed := []string{}
-		if action == "retry" {
-			var cleanupErr error
-			removed, cleanupErr = removeRetryProducts(job, path, settings)
-			if cleanupErr != nil {
-				s.jobsMu.Unlock()
-				slog.Warn("[scrape] 重试前清理旧产物失败", "id", job.ID, "path", path, "error", cleanupErr)
-				fail(w, 500, "cleanup_failed", cleanupErr.Error())
-				return
-			}
-			slog.Debug("[scrape] 重试前已清理旧产物", "id", job.ID, "path", path, "removed", len(removed), "files", removed)
-		}
-		next := *job
-		if r.ContentLength != 0 {
-			next.Number = request.Number
-		}
-		next.Logs = nil
-		if action == "retry" {
-			next.Logs = append(next.Logs, scrapeEvent{
-				Time: time.Now().Format(time.RFC3339Nano), Stage: "准备重试",
-				Message: fmt.Sprintf("已删除上次刮削产物 %d 个", len(removed)),
-			})
-			next.Settings = &settings
-			next.Metadata, next.Provenance, next.SourceResults = nil, nil, nil
-			next.Actors = nil
-			next.Reorganize = false
-			next.RetryExisting = job.RetryExisting || job.Status == 2
-		}
-		if action == "reorganize" {
-			next.Settings = &settings
-			next.Reorganize = true
-			next.Source = "reorganize"
-			// 记下整理前的输出文件，成功后由 cleanupReorganizedOutput 删除旧位置的 strm、NFO、图片和空目录。
-			next.ReorgFrom = job.Output
-		} else {
-			next.Source = "retry"
-		}
-		next.Path = path
-		next.Directory = filepath.Dir(path)
-		next.Status = 0
-		next.StartedAt, next.CompletedAt, next.Output, next.Error = "", "", "", ""
-		next.DurationMS, next.Cancel, next.StopRequested, next.Warnings = 0, nil, false, nil
-		*job = next
-		s.publishJobChanged(next.ID, true)
-		s.jobsMu.Unlock()
-		s.saveScrapeHistory()
-		go s.runScrapeJobs([]string{next.ID})
-		writeJSON(w, 202, object{"success": true, "id": next.ID})
-		return
 	}
 	s.jobsMu.Unlock()
 	fail(w, 404, "not_found", "记录不存在")
+}
+
+// actionError 是重试、重新整理在校验阶段的失败，对应一个 HTTP 状态码和错误代码。
+type actionError struct {
+	status        int
+	code, message string
+}
+
+// actionSettings 读取记录所属监控目录的整理配置，并套用请求里的标识、网址和番号覆盖。
+// 按网址识别出的番号会写回 request.Number。
+func (s *Server) actionSettings(id string, request *taskRequest) (scrapeSettings, *actionError) {
+	settings, err := s.scrapeSettings()
+	s.jobsMu.RLock()
+	directoryID := ""
+	for _, job := range s.jobs {
+		if job.ID == id {
+			directoryID = job.DirectoryID
+			break
+		}
+	}
+	s.jobsMu.RUnlock()
+	for _, directory := range s.currentWatchConfig().Directories {
+		if directory.ID == directoryID {
+			settings, err = s.scrapeSettingsForDirectory(directory)
+			break
+		}
+	}
+	if err != nil {
+		return settings, &actionError{500, "config_error", "无法读取整理配置"}
+	}
+	settings.FlagsOverride = request.Flags
+	if request.URL != "" {
+		if err := s.resolveTaskURL(&settings, request.URL); err != nil {
+			return settings, &actionError{400, "invalid_url", err.Error()}
+		}
+		if request.Number == "" {
+			request.Number = detectNumber(request.URL)
+		}
+	}
+	settings.OverrideNumber = request.Number
+	if !supportedLinkMode(settings.Common.LinkMode) {
+		return settings, &actionError{409, "unsupported_mode", "当前只支持移动、原地整理和 STRM 模式"}
+	}
+	if usesTargetFolder(settings.Common.LinkMode) && (!filepath.IsAbs(settings.Common.TargetFolder) || strings.TrimSpace(settings.Common.TargetFolder) == "") {
+		return settings, &actionError{409, "target_folder_required", "移动和 STRM 模式需要先设置完整的整理目录"}
+	}
+	return settings, nil
+}
+
+// requeueJobLocked 把已结束的记录重新放回等待队列（action 为 retry 或 reorganize）。
+// 重试会先删除上次刮削的产物。调用前必须持有 jobsMu 写锁；不保存历史，也不启动任务，由调用方统一处理。
+// overrideNumber 为 true 时用 request.Number 替换记录的番号（为空表示重新识别）。
+func (s *Server) requeueJobLocked(job *scrapeJob, action string, request taskRequest, overrideNumber bool, settings scrapeSettings) *actionError {
+	if job.Editing {
+		return &actionError{409, "job_active", "记录正在更新，请稍后重试"}
+	}
+	if action == "retry" && job.Status != 2 && job.Status != -1 && job.Status != -2 {
+		return &actionError{409, "invalid_status", "仅可重试已结束的记录"}
+	}
+	if action == "reorganize" && job.Status != 2 {
+		return &actionError{409, "invalid_status", "仅可重新整理已成功的记录"}
+	}
+	if err := linkModeChangeError(*job, settings.Common.LinkMode); err != nil {
+		return &actionError{409, "link_mode_changed", err.Error()}
+	}
+	path := job.Path
+	// 移动模式的源视频已经移走，重试和重新整理要以输出文件为准。
+	// STRM 模式的源视频仍在原位，必须继续使用源路径，否则会把 .strm 当成源文件。
+	if job.LinkMode != linkModeSTRM && (action == "reorganize" || (action == "retry" && job.Output != "")) {
+		path = job.Output
+	}
+	target := pathKey(path)
+	for i := range s.jobs {
+		other := &s.jobs[i]
+		if (other.Status == 0 || other.Status == 1 || other.Editing) && pathKey(other.Path) == target {
+			return &actionError{409, "job_active", "该文件已有等待或处理中的记录"}
+		}
+	}
+	removed := []string{}
+	if action == "retry" {
+		var cleanupErr error
+		removed, cleanupErr = removeRetryProducts(job, path, settings)
+		if cleanupErr != nil {
+			slog.Warn("[scrape] 重试前清理旧产物失败", "id", job.ID, "path", path, "error", cleanupErr)
+			return &actionError{500, "cleanup_failed", cleanupErr.Error()}
+		}
+		slog.Debug("[scrape] 重试前已清理旧产物", "id", job.ID, "path", path, "removed", len(removed), "files", removed)
+	}
+	next := *job
+	if overrideNumber {
+		next.Number = request.Number
+	}
+	next.Logs = nil
+	if action == "retry" {
+		next.Logs = append(next.Logs, scrapeEvent{
+			Time: time.Now().Format(time.RFC3339Nano), Stage: "准备重试",
+			Message: fmt.Sprintf("已删除上次刮削产物 %d 个", len(removed)),
+		})
+		next.Settings = &settings
+		next.Metadata, next.Provenance, next.SourceResults = nil, nil, nil
+		next.Actors = nil
+		next.Reorganize = false
+		next.RetryExisting = job.RetryExisting || job.Status == 2
+	}
+	if action == "reorganize" {
+		next.Settings = &settings
+		next.Reorganize = true
+		next.Source = "reorganize"
+		// 记下整理前的输出文件，成功后由 cleanupReorganizedOutput 删除旧位置的 strm、NFO、图片和空目录。
+		next.ReorgFrom = job.Output
+	} else {
+		next.Source = "retry"
+	}
+	next.Path = path
+	next.Directory = filepath.Dir(path)
+	next.Status = 0
+	next.StartedAt, next.CompletedAt, next.Output, next.Error = "", "", "", ""
+	next.DurationMS, next.Cancel, next.StopRequested, next.Warnings = 0, nil, false, nil
+	*job = next
+	s.publishJobChanged(next.ID, true)
+	return nil
+}
+
+// batchRetryLimit 是一次批量重试最多接受的记录数。页面按更小的批次分段提交，以便显示进度。
+const batchRetryLimit = 500
+
+// batchRetryScrapeJobs 提供 POST /api/scrape/batch/retry，一次重新刮削多条记录。
+// 每条记录的校验和清理与单条重试相同；全部处理完后只保存一次历史，并用一个队列启动任务，
+// 避免逐条请求时每条都整表重写刮削数据库。单条失败不影响其它记录，失败原因逐条返回。
+func (s *Server) batchRetryScrapeJobs(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		IDs   []string   `json:"ids"`
+		Flags *taskFlags `json:"flags,omitempty"`
+	}
+	if !decode(w, r, &request) {
+		return
+	}
+	if len(request.IDs) == 0 {
+		fail(w, 400, "invalid_ids", "请选择要重新刮削的记录")
+		return
+	}
+	if len(request.IDs) > batchRetryLimit {
+		fail(w, 400, "too_many_ids", fmt.Sprintf("一次最多重新刮削 %d 条记录", batchRetryLimit))
+		return
+	}
+	type batchFailure struct {
+		ID      string `json:"id"`
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	queued := []string{}
+	failures := []batchFailure{}
+	seen := map[string]bool{}
+	for _, id := range request.IDs {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		task := taskRequest{Flags: request.Flags}
+		settings, failure := s.actionSettings(id, &task)
+		if failure == nil {
+			// 每条记录单独加锁：清理旧产物是文件操作，不能在整个批次期间一直挡住列表和运行中的任务。
+			s.jobsMu.Lock()
+			failure = &actionError{404, "not_found", "记录不存在"}
+			for i := range s.jobs {
+				if s.jobs[i].ID == id {
+					// 与原先页面逐条提交时一致：带请求体的重试会清空番号，由刮削时重新识别。
+					failure = s.requeueJobLocked(&s.jobs[i], "retry", task, true, settings)
+					break
+				}
+			}
+			s.jobsMu.Unlock()
+		}
+		if failure != nil {
+			failures = append(failures, batchFailure{ID: id, Code: failure.code, Message: failure.message})
+			continue
+		}
+		queued = append(queued, id)
+	}
+	if len(queued) > 0 {
+		s.saveScrapeHistory()
+		s.startScrapeJobs(queued)
+	}
+	writeJSON(w, 200, object{"success": len(queued), "ids": queued, "failed": failures})
 }
 
 // Keep saved metadata, but prepare fresh images before committing any changes.

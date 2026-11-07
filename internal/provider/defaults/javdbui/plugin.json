@@ -1,7 +1,7 @@
 {
   "api_version": 2,
-  "id": "JavDB Web UI",
-  "name": "JavDB Web UI",
+  "id": "javdbui",
+  "name": "javdbui",
   "version": "1.1.0",
   "engine": "javascript-v1",
   "base_url": "https://catembylegacy.fastcdn.dpdns.org",

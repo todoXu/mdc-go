@@ -44,6 +44,47 @@ func TestScrapeHistoryKeepsRecordAndRefreshesFilenameFlags(t *testing.T) {
 	}
 }
 
+// 保存只写入修改过的记录：经过 updateJob 的修改、新增和删除都会同步，未标记修改的记录不会被重写。
+func TestScrapeHistorySavesOnlyChangedRecords(t *testing.T) {
+	s := configureScrapeServer(t)
+	settings, _ := s.scrapeSettings()
+	s.jobs = []scrapeJob{
+		{ID: "a", Sequence: 1, Status: 2, Path: "ABP-001.mp4", Settings: &settings},
+		{ID: "b", Sequence: 2, Status: 2, Path: "ABP-002.mp4", Settings: &settings},
+		{ID: "c", Sequence: 3, Status: 2, Path: "ABP-003.mp4", Settings: &settings},
+	}
+	s.saveScrapeHistory()
+	restored, err := New(filepath.Dir(s.statePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored.updateJob("a", func(job *scrapeJob) { job.Error = "changed" })
+	// 绕过 updateJob 的修改不会被标记，用来确认未修改的记录没有被重写。
+	restored.jobs[1].Error = "unmarked"
+	if response := call(restored, "DELETE", "/api/scrape/jobs/c", ""); response.Code != 200 {
+		t.Fatal(response.Body.String())
+	}
+	restored.jobsMu.Lock()
+	restored.jobs = append(restored.jobs, scrapeJob{ID: "d", Sequence: 4, Status: -1, Path: "ABP-004.mp4", Settings: &settings})
+	restored.jobsMu.Unlock()
+	restored.saveScrapeHistory()
+
+	again, err := New(filepath.Dir(s.statePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]scrapeJob{}
+	for _, job := range again.jobs {
+		got[job.ID] = job
+	}
+	if len(got) != 3 || got["a"].Error != "changed" || got["b"].Error != "" || got["d"].Status != -1 {
+		t.Fatalf("saved records: %+v", again.jobs)
+	}
+	if _, ok := got["c"]; ok {
+		t.Fatal("deleted record reappeared")
+	}
+}
+
 func TestScrapeHistoryKeepsSavedResolutionWithoutProbing(t *testing.T) {
 	s := configureScrapeServer(t)
 	settings, _ := s.scrapeSettings()

@@ -1,7 +1,7 @@
 {
   "api_version": 2,
-  "id": "JavDB",
-  "name": "JavDB",
+  "id": "javdb",
+  "name": "javdb",
   "version": "1.0.2",
   "engine": "javascript-v1",
   "base_url": "https://javdb.com",

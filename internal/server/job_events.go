@@ -98,7 +98,9 @@ func (h *jobEventHub) publish(name string, payload any) {
 
 // publishJobChanged 通知页面某个任务发生了变化。调用时可以持有或不持有 jobsMu。
 // list 表示列表页需要刷新。
+// 任务的修改都会经过这里或 updateJob，所以同时记下该任务需要写入数据库。
 func (s *Server) publishJobChanged(id string, list bool) {
+	s.historyChanged.mark(id)
 	s.jobEvents.publish("jobs-changed", jobChangedEvent{ID: id, List: list})
 }
 

@@ -71,7 +71,7 @@ func (s *Server) queueReorganize(id, from string) {
 	s.jobsMu.Unlock()
 	if queued {
 		s.saveScrapeHistory()
-		go s.runScrapeJobs([]string{id})
+		s.startScrapeJobs([]string{id})
 	}
 }
 

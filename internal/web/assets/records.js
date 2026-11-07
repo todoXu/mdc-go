@@ -7,7 +7,7 @@ const statusValues = { waiting: 0, processing: 1, finished: 2, failed: -1, stopp
 const modes = { 2: '移动', 3: '原地整理', 4: 'STRM' };
 const sources = { watcher: '监控', retry: '重试', reorganize: '重新整理' };
 // 每页条数可在页面上选择，选择结果在本次打开期间保留。
-let pageSize = 10;
+let pageSize = 30;
 
 // 刷新或关闭页面时记下列表滚动位置，重新打开同一地址后滚回去。
 // 只记录列表页，其它页面不受影响；翻页本身由 goToPage 主动回到顶部。
@@ -351,12 +351,22 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
   const runBulkAction = async (action) => {
     if (busy) return;
     if (action === 'retry') {
-      const rows = jobs.filter((row) => selected.has(row.id) && [2, -1, -2].includes(row.status));
+      // 按序号从小到大提交，服务端按提交顺序开始刮削。
+      const rows = jobs.filter((row) => selected.has(row.id) && [2, -1, -2].includes(row.status)).sort((a, b) => a.sequence - b.sequence);
       if (!rows.length) { toast('所选记录没有可执行的项目', true); return; }
-      batchRetryDialog(rows, async (success, failed) => {
-        rows.forEach((row) => selected.delete(row.id));
-        await reload();
-        toast(`重新刮削完成：${success} 条${failed ? `，失败 ${failed} 条` : ''}`, failed > 0);
+      batchRetryDialog(rows, {
+        // 窗口关闭时就取消勾选：列表在有勾选的记录时会暂停自动刷新，取消后才能看到正在刮削的记录。
+        onStart: () => {
+          rows.forEach((row) => selected.delete(row.id));
+          render();
+          toast(`正在提交重新刮削：0 / ${rows.length}`);
+        },
+        onProgress: (done, total) => { if (done < total) toast(`正在提交重新刮削：${done} / ${total}`); },
+        onDone: async (success, failed) => {
+          // 提交期间已经离开这个列表时不重新加载，以免刷掉当前页面；列表本身由推送事件更新。
+          if (host.isConnected) await reload();
+          toast(`已加入处理队列：${success} 条${failed ? `，失败 ${failed} 条` : ''}`, failed > 0);
+        },
       });
       return;
     }

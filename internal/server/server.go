@@ -71,6 +71,8 @@ type Server struct {
 	watchWake       chan struct{}
 	jobsMu          sync.RWMutex
 	historyMu       sync.Mutex
+	historyChanged  historyChanges
+	historySaved    map[string]struct{} // 数据库里已有的任务 ID，由 historyMu 保护；nil 表示未知，下次保存整表重写
 	actorDir        actorDirectory
 	embyRefresh     embyRefresher
 	gallery         galleryIndex
@@ -181,6 +183,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/scrape/jobs/{id}/images/{name}", s.serveScrapeImage)
 	s.mux.HandleFunc("GET /api/scrape/jobs/{id}/nfo", s.getScrapeJobNFO)
 	s.mux.HandleFunc("POST /api/scrape/jobs/{id}/{action}", s.scrapeJobAction)
+	s.mux.HandleFunc("POST /api/scrape/batch/retry", s.batchRetryScrapeJobs)
 	s.mux.HandleFunc("DELETE /api/scrape/jobs/{id}", s.deleteScrapeJob)
 	s.mux.HandleFunc("GET /api/system/database", s.getScrapeDatabaseStatus)
 	s.mux.HandleFunc("GET /api/system/folders", s.listLocalFolders)

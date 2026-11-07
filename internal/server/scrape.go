@@ -356,7 +356,7 @@ func (s *Server) enqueueScrapeJobs(paths []string, directoryID string, settings 
 	s.jobsMu.Unlock()
 	if len(ids) > 0 {
 		s.saveScrapeHistory()
-		go s.runScrapeJobs(ids)
+		s.startScrapeJobs(ids)
 	}
 	return ids
 }
@@ -403,6 +403,7 @@ func (s *Server) updateJob(id string, change func(*scrapeJob)) {
 		if s.jobs[i].ID == id {
 			before := jobListView(&s.jobs[i])
 			change(&s.jobs[i])
+			s.historyChanged.mark(id)
 			// 进度文字随事件一起推送，列表直接改那一格，不必重新拉取整个列表。
 			s.jobEvents.publish("jobs-changed", jobChangedEvent{ID: id, List: before != jobListView(&s.jobs[i]), Progress: jobProgress(&s.jobs[i]), Phase: jobPhase(&s.jobs[i])})
 			return
@@ -410,42 +411,56 @@ func (s *Server) updateJob(id string, change func(*scrapeJob)) {
 	}
 }
 
-// scrapeLimiter 限制所有刮削任务同时运行的数量，上限为「刮削任务线程数」。
-// 零值可直接使用。每个调用各自排队，不再互相等待，所以单条重试也受同一上限约束。
+// scrapeLimiter 限制所有刮削任务同时运行的数量，上限为「刮削任务线程数」。零值可直接使用。
+// 名额按登记顺序先来先得：任务按加入队列的顺序开始，单条重试、批量重试和监控扫描共用同一个队列。
 type scrapeLimiter struct {
 	mu      sync.Mutex
 	running int
-	wake    chan struct{}
+	waiters []scrapeWaiter
+}
+
+type scrapeWaiter struct {
+	limit int
+	ready chan struct{}
+}
+
+// reserve 立即在队尾登记，返回的通道关闭时表示拿到名额，用完后调用 release。
+func (l *scrapeLimiter) reserve(limit int) <-chan struct{} {
+	ready := make(chan struct{})
+	l.mu.Lock()
+	l.waiters = append(l.waiters, scrapeWaiter{limit: limit, ready: ready})
+	l.grantLocked()
+	l.mu.Unlock()
+	return ready
 }
 
 func (l *scrapeLimiter) acquire(limit int) {
-	for {
-		l.mu.Lock()
-		if l.running < limit {
-			l.running++
-			l.mu.Unlock()
-			return
-		}
-		if l.wake == nil {
-			l.wake = make(chan struct{})
-		}
-		wake := l.wake
-		l.mu.Unlock()
-		<-wake
-	}
+	<-l.reserve(limit)
 }
 
 func (l *scrapeLimiter) release() {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	l.running--
-	if l.wake != nil {
-		close(l.wake)
-		l.wake = nil
+	l.grantLocked()
+	l.mu.Unlock()
+}
+
+// grantLocked 按顺序把空出的名额交给队首；队首没拿到之前，后面的不会插队。
+func (l *scrapeLimiter) grantLocked() {
+	for len(l.waiters) > 0 && l.running < l.waiters[0].limit {
+		l.running++
+		close(l.waiters[0].ready)
+		l.waiters[0] = scrapeWaiter{}
+		l.waiters = l.waiters[1:]
+	}
+	if len(l.waiters) == 0 {
+		l.waiters = nil
 	}
 }
 
-func (s *Server) runScrapeJobs(ids []string) {
+// startScrapeJobs 按 ids 的顺序把任务登记到刮削队列后立即返回，任务在后台按顺序开始。
+// 登记在返回前完成，所以先调用的一批一定排在后调用的一批前面。
+func (s *Server) startScrapeJobs(ids []string) {
 	settings, err := s.scrapeSettings()
 	if err != nil {
 		for _, id := range ids {
@@ -461,32 +476,18 @@ func (s *Server) runScrapeJobs(ids []string) {
 	if threads < 1 {
 		threads = 1
 	}
-	workers := threads
-	if workers > len(ids) {
-		workers = len(ids)
-	}
 	timeout := time.Duration(settings.System.Timeout) * time.Second
 	if timeout <= 0 {
 		timeout = 3 * time.Minute
 	}
-	queue := make(chan string)
-	var group sync.WaitGroup
-	group.Add(workers)
-	for range workers {
+	for _, id := range ids {
+		ready := s.scrapeSlots.reserve(threads)
 		go func() {
-			defer group.Done()
-			for id := range queue {
-				s.scrapeSlots.acquire(threads)
-				s.runScrapeJob(id, timeout)
-				s.scrapeSlots.release()
-			}
+			<-ready
+			defer s.scrapeSlots.release()
+			s.runScrapeJob(id, timeout)
 		}()
 	}
-	for _, id := range ids {
-		queue <- id
-	}
-	close(queue)
-	group.Wait()
 }
 
 func (s *Server) runScrapeJob(id string, timeout time.Duration) {
@@ -1119,7 +1120,13 @@ func buildNFOWithTrace(meta provider.Metadata, base string, settings scrapeSetti
 	if config.EnableSeries {
 		movie.Series = meta.Series
 	}
-	flags := detectFilenameFlags(base, settings)
+	// base 是整理后的输出路径（STRM 时是目标文件夹里不带扩展名的路径），不能用来探测真实分辨率。
+	// 真实分辨率已在刮削时用源视频探测，结果保存在 meta.Resolution 中，这里只按文件名识别。
+	flags := detectFilenameFlagsNoProbe(base, settings)
+	if settings.Naming.Suffixes != nil && strings.EqualFold(stringSetting(settings.Naming.Suffixes, "resolution_detect_method"), "Real") && !boolSetting(settings.Naming.Suffixes, "resolution_detect_fallback") {
+		// 与刮削时一致：真实分辨率探测失败且不允许回退时，不使用文件名中的分辨率。
+		flags.Resolution = ""
+	}
 	if meta.Mosaic != "" {
 		flags.Mosaic = meta.Mosaic
 	}

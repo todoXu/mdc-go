@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"mdcng-go/internal/provider"
@@ -183,6 +184,7 @@ func (s *Server) loadScrapeHistory() error {
 			job.Status = -2
 			job.Error = "程序重启，任务已中断"
 			job.CompletedAt = time.Now().Format(time.RFC3339Nano)
+			s.historyChanged.mark(job.ID)
 		}
 		settings := entry.Settings
 		if settings == nil {
@@ -204,9 +206,53 @@ func (s *Server) loadScrapeHistory() error {
 		s.jobs = append(s.jobs, job)
 		s.jobSequence = max(s.jobSequence, job.Sequence)
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	saved := make(map[string]struct{}, len(s.jobs))
+	for _, job := range s.jobs {
+		saved[job.ID] = struct{}{}
+	}
+	s.historyMu.Lock()
+	s.historySaved = saved
+	s.historyMu.Unlock()
+	return nil
 }
 
+// historyChanges 记录自上次保存以来被修改过的任务 ID。可以在持有或不持有 jobsMu 时调用。
+type historyChanges struct {
+	mu  sync.Mutex
+	ids map[string]struct{}
+}
+
+func (c *historyChanges) mark(id string) {
+	c.mu.Lock()
+	if c.ids == nil {
+		c.ids = map[string]struct{}{}
+	}
+	c.ids[id] = struct{}{}
+	c.mu.Unlock()
+}
+
+// take 取出并清空已记录的 ID。
+func (c *historyChanges) take() map[string]struct{} {
+	c.mu.Lock()
+	ids := c.ids
+	c.ids = nil
+	c.mu.Unlock()
+	return ids
+}
+
+// restore 在保存失败时把 ID 放回去，下次保存再写。
+func (c *historyChanges) restore(ids map[string]struct{}) {
+	for id := range ids {
+		c.mark(id)
+	}
+}
+
+// saveScrapeHistory 把内存中的任务同步到数据库。只写入上次保存后修改过的记录和新记录，
+// 删除已不存在的记录；不知道数据库里有哪些记录时（historySaved 为 nil）整表重写。
+// 记录数到几千条时，每次都整表重写会让每条任务结束都写入整个数据库。
 func (s *Server) saveScrapeHistory() {
 	s.historyMu.Lock()
 	defer s.historyMu.Unlock()
@@ -216,14 +262,29 @@ func (s *Server) saveScrapeHistory() {
 		sequence, status, durationMS                                        int64
 		payload                                                             []byte
 	}
+	changed := s.historyChanged.take()
+	full := s.historySaved == nil
+	fail := func(err error) {
+		s.historyChanged.restore(changed)
+		slog.Error("[history] 保存刮削记录失败", "error", err)
+	}
 	s.jobsMu.RLock()
-	rows := make([]historyRow, 0, len(s.jobs))
+	current := make(map[string]struct{}, len(s.jobs))
+	rows := []historyRow{}
 	for _, job := range s.jobs {
+		current[job.ID] = struct{}{}
+		if !full {
+			_, modified := changed[job.ID]
+			_, stored := s.historySaved[job.ID]
+			if stored && !modified {
+				continue
+			}
+		}
 		entry := savedScrapeJob{Job: job, Settings: job.Settings, SourceResults: job.SourceResults, Reorganize: job.Reorganize, RetryExisting: job.RetryExisting}
 		payload, err := json.Marshal(entry)
 		if err != nil {
 			s.jobsMu.RUnlock()
-			slog.Error("[history] 保存刮削记录失败", "error", err)
+			fail(err)
 			return
 		}
 		rows = append(rows, historyRow{
@@ -234,32 +295,56 @@ func (s *Server) saveScrapeHistory() {
 		})
 	}
 	s.jobsMu.RUnlock()
+	removed := []string{}
+	for id := range s.historySaved {
+		if _, ok := current[id]; !ok {
+			removed = append(removed, id)
+		}
+	}
+	if !full && len(rows) == 0 && len(removed) == 0 {
+		return
+	}
 
 	db, err := s.openScrapeHistoryDB()
 	if err != nil {
-		slog.Error("[history] 保存刮削记录失败", "error", err)
+		fail(err)
 		return
 	}
 	defer db.Close()
 
 	tx, err := db.Begin()
 	if err != nil {
-		slog.Error("[history] 保存刮削记录失败", "error", err)
+		fail(err)
 		return
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM scrape_jobs`); err != nil {
-		slog.Error("[history] 保存刮削记录失败", "error", err)
-		return
+	if full {
+		if _, err := tx.Exec(`DELETE FROM scrape_jobs`); err != nil {
+			fail(err)
+			return
+		}
+	} else if len(removed) > 0 {
+		statement, err := tx.Prepare(`DELETE FROM scrape_jobs WHERE id = ?`)
+		if err != nil {
+			fail(err)
+			return
+		}
+		defer statement.Close()
+		for _, id := range removed {
+			if _, err := statement.Exec(id); err != nil {
+				fail(err)
+				return
+			}
+		}
 	}
 	statement, err := tx.Prepare(`
-		INSERT INTO scrape_jobs (
+		INSERT OR REPLACE INTO scrape_jobs (
 			id, sequence, path, output, number, status, source,
 			created_at, started_at, completed_at, duration_ms, payload
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
-		slog.Error("[history] 保存刮削记录失败", "error", err)
+		fail(err)
 		return
 	}
 	defer statement.Close()
@@ -268,11 +353,13 @@ func (s *Server) saveScrapeHistory() {
 			row.id, row.sequence, row.path, row.output, row.number, row.status, row.source,
 			row.createdAt, row.startedAt, row.completedAt, row.durationMS, row.payload,
 		); err != nil {
-			slog.Error("[history] 保存刮削记录失败", "error", err)
+			fail(err)
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		slog.Error("[history] 保存刮削记录失败", "error", err)
+		fail(err)
+		return
 	}
+	s.historySaved = current
 }

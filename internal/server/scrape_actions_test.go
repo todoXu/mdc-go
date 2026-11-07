@@ -142,6 +142,68 @@ func TestScrapeRecordStopDeleteAndRetry(t *testing.T) {
 	}
 }
 
+// 批量重试：可重试的记录全部入队，不可重试或不存在的记录逐条返回原因，互不影响。
+func TestBatchRetryQueuesEligibleAndReportsFailures(t *testing.T) {
+	s := configureScrapeServer(t)
+	settings, err := s.scrapeSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	s.jobs = []scrapeJob{
+		{ID: "failed", Sequence: 1, Status: -1, Path: filepath.Join(dir, "ABP-001.mp4"), Number: "ABP-001", DirectoryID: "library", Settings: &settings},
+		{ID: "stopped", Sequence: 2, Status: -2, Path: filepath.Join(dir, "ABP-002.mp4"), Number: "ABP-002", DirectoryID: "library", Settings: &settings},
+		{ID: "running", Sequence: 3, Status: 1, Path: filepath.Join(dir, "ABP-003.mp4"), Number: "ABP-003", DirectoryID: "library", Settings: &settings},
+	}
+	s.jobSequence = 3
+	response := call(s, "POST", "/api/scrape/batch/retry", `{"ids":["failed","stopped","running","missing","failed"]}`)
+	if response.Code != 200 {
+		t.Fatal(response.Body.String())
+	}
+	var result struct {
+		Success int      `json:"success"`
+		IDs     []string `json:"ids"`
+		Failed  []struct {
+			ID   string `json:"id"`
+			Code string `json:"code"`
+		} `json:"failed"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Success != 2 || strings.Join(result.IDs, ",") != "failed,stopped" {
+		t.Fatalf("queued: %+v", result)
+	}
+	codes := map[string]string{}
+	for _, item := range result.Failed {
+		codes[item.ID] = item.Code
+	}
+	if len(result.Failed) != 2 || codes["running"] != "invalid_status" || codes["missing"] != "not_found" {
+		t.Fatalf("failures: %+v", result.Failed)
+	}
+	// 入队的记录沿用原来的 ID 和序号，不新增记录；跑完后（文件不存在）回到失败状态。
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		s.jobsMu.RLock()
+		done := s.jobs[0].Status == -1 && s.jobs[1].Status == -1
+		jobs := append([]scrapeJob(nil), s.jobs...)
+		s.jobsMu.RUnlock()
+		if done {
+			if len(jobs) != 3 || s.jobSequence != 3 || jobs[0].Source != "retry" || jobs[1].Source != "retry" || jobs[0].Sequence != 1 || jobs[2].Status != 1 {
+				t.Fatalf("batch retry changed records: %+v", jobs)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("batch retry did not finish")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if response := call(s, "POST", "/api/scrape/batch/retry", `{"ids":[]}`); response.Code != 400 {
+		t.Fatal("empty batch accepted:", response.Body.String())
+	}
+}
+
 func TestStopRunningRecordCancelsContext(t *testing.T) {
 	s := configureScrapeServer(t)
 	ctx, cancel := context.WithCancel(context.Background())
