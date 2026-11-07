@@ -2,7 +2,7 @@
 # 把下面的宿主机路径改成你自己的目录。
 services:
   mdc-go:
-    image: mdc-go:0.1          # 已推送到镜像仓库时改成 <用户名>/mdc-go:0.1
+    image: mdc-go:0.12          # 已推送到镜像仓库时改成 <用户名>/mdc-go:0.1
     build: .                   # 没有镜像时在本地构建
     container_name: mdc-go
     restart: unless-stopped

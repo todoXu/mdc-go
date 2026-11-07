@@ -18,7 +18,7 @@ import { logsPage } from './logs.js';
 import { userSettings, applyUserProfile } from './user.js';
 import { embySettings } from './emby.js';
 import { overviewPage } from './overview.js';
-import { loadPlatform, platformName, isAbsolutePath, absolutePathHint } from './platform.js';
+import { loadPlatform, platformName, platformVersion, isAbsolutePath, absolutePathHint } from './platform.js';
 
 const $ = (selector, parent = document) => parent.querySelector(selector);
 const main = $('#main');
@@ -1206,5 +1206,6 @@ api('/api/config/user')
 // 先读取运行平台（路径写法因系统而异），再渲染第一个页面。
 loadPlatform().then(() => {
   $('#platform-name').textContent = `${platformName()} 本地版`;
+  $('#app-version').textContent = platformVersion() ? `v${platformVersion()}` : '';
   route();
 });

@@ -35,6 +35,13 @@ const clock = (value) => {
   const date = new Date(time);
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
+// 监控周期可能短于一分钟，上次和下次扫描要显示到秒，否则两者会相同。
+const clockSeconds = (value) => {
+  const time = parseTime(value);
+  if (Number.isNaN(time)) return '—';
+  const date = new Date(time);
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
 const mmss = (seconds) => {
   const value = Math.max(0, Math.floor(seconds));
   return value >= 3600 ? `${Math.floor(value / 3600)}:${pad(Math.floor((value % 3600) / 60))}:${pad(value % 60)}` : `${pad(Math.floor(value / 60))}:${pad(value % 60)}`;
@@ -212,7 +219,7 @@ function watchHTML(data, sum) {
   let line;
   if (!watch.enabled) line = '<div class="ov-watch-line"><span><span class="ov-dot ov-dot-off"></span>监控未开启</span><a href="#/settings/watch-dir">去开启</a></div>';
   else if (watch.running) line = '<div class="ov-watch-line"><span><span class="ov-dot ov-dot-run"></span>正在扫描…</span></div>';
-  else line = `<div class="ov-watch-line"><span><span class="ov-dot"></span>监控中${watch.last_scan ? ` · 上次 ${clock(watch.last_scan)}` : ''}${watch.next_scan ? ` · 下次 ${clock(watch.next_scan)}` : ''}</span><button type="button" class="ov-link" data-ov-scan>立即扫描</button></div>`;
+  else line = `<div class="ov-watch-line"><span><span class="ov-dot"></span>监控中${watch.last_scan ? ` · 上次 ${clockSeconds(watch.last_scan)}` : ''}${watch.next_scan ? ` · 下次 ${clockSeconds(watch.next_scan)}` : ''}</span><button type="button" class="ov-link" data-ov-scan>立即扫描</button></div>`;
   if (!dirs.length) return `${head}${line}<div class="ov-empty">还没有监控目录。<a href="#/settings/watch-dir">添加监控目录 →</a></div>`;
   const statuses = new Map((watch.directories || []).map((item) => [item.id, item]));
   const rows = dirs.map((dir) => {
@@ -316,11 +323,8 @@ export async function overviewPage({ heading, toast }) {
   let data = await load();
   const first = sections(data);
   const date = new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
-  // 版本号读取失败时不显示，不影响概览其它内容。
-  const version = await api('/api/version').then((value) => value?.version || '').catch(() => '');
-  const versionTag = version ? `<span class="ov-version" title="MDC Go 版本">v${h(version)}</span>` : '';
   const html = '<div class="ov-page">'
-    + heading('媒体工作台', '', `<span class="ov-heading-meta"><span class="content-count">${h(date)}</span>${versionTag}</span>`)
+    + heading('媒体工作台', '', `<span class="ov-heading-meta"><span class="content-count">${h(date)}</span></span>`)
     + `<div class="ov-stats" data-ov="stats">${first.stats}</div>`
     + `<div class="dashboard-grid ov-grid"><div>`
     + `<section class="panel" data-ov="queue">${first.queue}</section>`
