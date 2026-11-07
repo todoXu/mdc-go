@@ -44,6 +44,29 @@ func TestScrapeHistoryKeepsRecordAndRefreshesFilenameFlags(t *testing.T) {
 	}
 }
 
+func TestScrapeHistoryKeepsSavedResolutionWithoutProbing(t *testing.T) {
+	s := configureScrapeServer(t)
+	settings, _ := s.scrapeSettings()
+	s.jobs = []scrapeJob{
+		{ID: "kept", Sequence: 1, Status: 2, Path: "ABP-123.mp4", Settings: &settings, FileInfo: filenameFlags{Mosaic: "is_censored", Resolution: "1080P"}},
+		{ID: "fallback", Sequence: 2, Status: 2, Path: "ABP-124-4K.mp4", Settings: &settings},
+	}
+	s.saveScrapeHistory()
+	restored, err := New(filepath.Dir(s.statePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restored.jobs) != 2 {
+		t.Fatalf("lost records: %+v", restored.jobs)
+	}
+	if got := restored.jobs[0].FileInfo.Resolution; got != "1080P" {
+		t.Fatalf("saved resolution should be kept, got %q", got)
+	}
+	if got := restored.jobs[1].FileInfo.Resolution; got != "4K" {
+		t.Fatalf("missing saved resolution should fall back to filename, got %q", got)
+	}
+}
+
 func TestScrapeHistoryIgnoresLegacyJSON(t *testing.T) {
 	dir := t.TempDir()
 	legacy := `[{"job":{"id":"legacy","sequence":1,"path":"LEGACY-001.mp4","status":2}}]`

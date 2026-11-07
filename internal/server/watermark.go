@@ -42,8 +42,10 @@ func selectedWatermarks(flags filenameFlags, config map[string]any) []watermarkM
 	if mark, ok := kinds[flags.Mosaic]; ok && watermarkBool(config, mark.key) {
 		marks = append(marks, mark)
 	}
-	if flags.Resolution != "" && watermarkBool(config, "watermark_resolution") {
-		marks = append(marks, watermarkMark{"watermark_resolution", strings.ToLower(flags.Resolution) + ".png"})
+	if watermarkBool(config, "watermark_resolution") {
+		if file := map[string]string{"4K": "4k.png", "8K": "8k.png"}[strings.ToUpper(flags.Resolution)]; file != "" {
+			marks = append(marks, watermarkMark{"watermark_resolution", file})
+		}
 	}
 	return marks
 }

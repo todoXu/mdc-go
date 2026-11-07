@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,23 +23,35 @@ type probeStreams struct {
 
 func detectRealResolution(path string) string {
 	if strings.EqualFold(filepath.Ext(path), ".strm") {
+		slog.Debug("[resolution] STRM 文件跳过真实分辨率探测", "path", path)
 		return ""
 	}
 	if _, err := os.Stat(path); err != nil {
+		slog.Debug("[resolution] 视频文件不可访问，跳过真实分辨率探测", "path", path, "error", err)
 		return ""
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,codec_type", "-of", "json", path).Output()
 	if err != nil {
+		switch {
+		case errors.Is(err, exec.ErrNotFound):
+			slog.Debug("[resolution] 未找到 ffprobe（需安装并加入 PATH），跳过真实分辨率探测", "path", path)
+		case errors.Is(err, context.DeadlineExceeded):
+			slog.Debug("[resolution] ffprobe 探测超时，跳过真实分辨率探测", "path", path)
+		default:
+			slog.Debug("[resolution] ffprobe 执行失败，跳过真实分辨率探测", "path", path, "error", err)
+		}
 		return ""
 	}
 	var result probeStreams
-	if json.Unmarshal(out, &result) != nil || len(result.Streams) == 0 {
+	if err := json.Unmarshal(out, &result); err != nil || len(result.Streams) == 0 {
+		slog.Debug("[resolution] ffprobe 输出无法解析，跳过真实分辨率探测", "path", path)
 		return ""
 	}
 	stream := result.Streams[0]
 	if stream.CodecType != "" && stream.CodecType != "video" {
+		slog.Debug("[resolution] 文件没有视频流，跳过真实分辨率探测", "path", path)
 		return ""
 	}
 	pixels := stream.Width
@@ -117,6 +131,16 @@ func matchingSubtitleKeyword(name string, words []string) string {
 }
 
 func detectFilenameFlags(path string, settings scrapeSettings) filenameFlags {
+	return detectFilenameFlagsWithProbe(path, settings, true)
+}
+
+// detectFilenameFlagsNoProbe 只按文件名和配置关键词识别标记，不调用 ffprobe 探测真实分辨率。
+// 用于加载历史记录：关键词需要按当前配置刷新，但没必要在启动时把每条记录的视频都读一遍。
+func detectFilenameFlagsNoProbe(path string, settings scrapeSettings) filenameFlags {
+	return detectFilenameFlagsWithProbe(path, settings, false)
+}
+
+func detectFilenameFlagsWithProbe(path string, settings scrapeSettings, probe bool) filenameFlags {
 	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	flags := filenameFlags{Mosaic: "is_censored"}
 	flags.SubtitleMarker = matchingSubtitleKeyword(name, settings.Common.Subtitle)
@@ -154,7 +178,7 @@ func detectFilenameFlags(path string, settings scrapeSettings) filenameFlags {
 			flags.Resolution = "8K"
 		}
 	}
-	if settings.Naming.Suffixes != nil && strings.EqualFold(stringSetting(settings.Naming.Suffixes, "resolution_detect_method"), "Real") {
+	if probe && settings.Naming.Suffixes != nil && strings.EqualFold(stringSetting(settings.Naming.Suffixes, "resolution_detect_method"), "Real") {
 		if real := detectRealResolution(path); real != "" {
 			flags.Resolution = real
 		} else if !boolSetting(settings.Naming.Suffixes, "resolution_detect_fallback") {

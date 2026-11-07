@@ -910,6 +910,22 @@ func nfoAdditionalTags(meta provider.Metadata, flags filenameFlags, settings scr
 	return tags
 }
 
+// nfoResolutionTag 返回可写入 NFO 的分辨率标签：只保留 4K/8K。
+// 1080P/720P 这类常见分辨率不写入，避免 NFO 里出现无意义的标签。
+func nfoResolutionTag(resolution string) string {
+	switch strings.ToUpper(strings.TrimSpace(resolution)) {
+	case "4K":
+		return "4K"
+	case "8K":
+		return "8K"
+	case "2160P":
+		return "4K"
+	case "4320P":
+		return "8K"
+	}
+	return ""
+}
+
 // nfoTagsWithOrigin 生成 NFO 标签，并记录每个标签的来源以及被丢弃的刮削标签。
 // 结果与写入 NFO 的标签顺序完全一致；重复标签保留第一次出现时的来源。
 func nfoTagsWithOrigin(meta provider.Metadata, flags filenameFlags, settings scrapeSettings) nfoTagTrace {
@@ -949,8 +965,9 @@ func nfoTagsWithOrigin(meta provider.Metadata, flags filenameFlags, settings scr
 		add("actor", actors...)
 	}
 	if config.Resolution {
-		if flags.Resolution != "" {
-			add(nfoTagResolution, flags.Resolution)
+		// 只写 4K/8K；1080P/720P 等常见分辨率不写入 NFO。
+		if resolution := nfoResolutionTag(flags.Resolution); resolution != "" {
+			add(nfoTagResolution, resolution)
 		}
 	}
 	if config.Mosaic {

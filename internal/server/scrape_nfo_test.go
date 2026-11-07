@@ -73,6 +73,20 @@ func TestNFOTagOriginsRecordReplacedResolution(t *testing.T) {
 	}
 }
 
+func TestNFOResolutionTagOnlyWrites4K8K(t *testing.T) {
+	settings := scrapeSettings{}
+	settings.NFO.AdditionalTags.Resolution = true
+	for _, test := range []struct{ resolution, want string }{
+		{"4K", "4K"}, {"8K", "8K"}, {"2160P", "4K"}, {"4320P", "8K"},
+		{"1080P", ""}, {"720P", ""}, {"", ""},
+	} {
+		got := strings.Join(nfoAdditionalTags(provider.Metadata{Number: "ABP-123"}, filenameFlags{Resolution: test.resolution}, settings), "|")
+		if got != test.want {
+			t.Fatalf("resolution %q: got %q want %q", test.resolution, got, test.want)
+		}
+	}
+}
+
 func TestScrapeJobStoresNFOTagOriginsAfterSuccess(t *testing.T) {
 	s := configureScrapeServer(t)
 	path := filepath.Join(t.TempDir(), "ABP-123.mp4")

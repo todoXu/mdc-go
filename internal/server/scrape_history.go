@@ -192,7 +192,14 @@ func (s *Server) loadScrapeHistory() error {
 			}
 			settings = &current
 		}
-		job.FileInfo = detectFilenameFlags(job.Path, *settings)
+		// 加载历史只刷新文件名关键词（字幕、破解等）相关的标记；不在这里探测真实分辨率，
+		// 避免启动时对每条记录都调用一次 ffprobe（媒体在网络盘上时会让启动变得非常慢）。
+		// 分辨率沿用原刮削时保存的结果，识别方式（真实分辨率/文件名）也不改动。
+		fileInfo := detectFilenameFlagsNoProbe(job.Path, *settings)
+		if job.FileInfo.Resolution != "" {
+			fileInfo.Resolution = job.FileInfo.Resolution
+		}
+		job.FileInfo = fileInfo
 		job.HasSubtitle = job.FileInfo.HasSubtitle
 		s.jobs = append(s.jobs, job)
 		s.jobSequence = max(s.jobSequence, job.Sequence)
