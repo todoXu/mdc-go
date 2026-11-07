@@ -941,11 +941,14 @@ func nfoTagsWithOrigin(meta provider.Metadata, flags filenameFlags, settings scr
 	// Only normalize source resolution tags when the NFO resolution-tag option
 	// is enabled. When disabled, preserve provider tags exactly as returned.
 	for _, tag := range meta.Tags {
+		normalized := strings.ToLower(strings.TrimSpace(tag))
+		if excludedScrapedTags[normalized] {
+			continue
+		}
 		if !config.Resolution {
 			add(nfoTagScraped, tag)
 			continue
 		}
-		normalized := strings.ToLower(strings.TrimSpace(tag))
 		switch normalized {
 		case "4k", "8k", "2160p", "4320p", "1080p", "720p", "uhd", "fhd", "hd":
 			trace.Dropped = append(trace.Dropped, nfoTagEntry{Tag: tag, Origin: nfoTagResolution})

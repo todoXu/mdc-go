@@ -91,7 +91,7 @@ func TestPluginsReloadAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := r.List()
-	if err != nil || len(items) != 3 {
+	if err != nil || len(items) != 4 {
 		t.Fatal(items, err)
 	}
 	m.Engine = "html-v1"

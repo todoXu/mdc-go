@@ -163,16 +163,12 @@ func (s *Server) saveProviderConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next := make(map[string]provider.Config, len(s.providerConfigs)+1)
-	for k, v := range s.providerConfigs {
-		next[k] = v
-	}
-	next[p.Descriptor().ID] = *c
-	if err := save(s.providerConfigPath, next); err != nil {
-		fail(w, 500, "save_failed", "无法保存数据源配置")
+	id := p.Descriptor().ID
+	if err := s.providers.SaveConfig(id, *c); err != nil {
+		providerError(w, err)
 		return
 	}
-	s.providerConfigs = next
+	s.providerConfigs[id] = *c
 	writeJSON(w, 200, object{"success": true})
 }
 func providerError(w http.ResponseWriter, err error) {

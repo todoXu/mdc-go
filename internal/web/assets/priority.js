@@ -52,7 +52,7 @@ export async function mountPriorityEditor(container, sources, onDirty, onSaved) 
         .join('')}</select></div></div>`;
     };
     function render() {
-      container.innerHTML = `<section class="panel"><div class="panel-head"><div><h2>优先级设置（字段）</h2><p class="subtitle">为各个元数据字段配置刮削源优先级</p></div></div><div class="notice priority-notice">只使用已启用的数据源，按每个字段自己的顺序查询。未配置来源的字段不抓取，不再使用全局补充。可拖动或使用箭头排序。</div>${fields.map((field) => row(field, fieldNames[field] || field)).join('')}<div class="savebar"><span id="priority-save-status">修改后记得保存</span><div><button class="button" id="reset-priorities" type="button">撤销修改</button> <button class="button primary" id="save-priorities" type="button">保存优先级</button></div></div></section><section class="panel"><div class="panel-head"><h2>按优先级查询</h2><small>展示字段来源</small></div><form class="path-bar" id="priority-query"><input class="search" name="number" aria-label="聚合查询番号" placeholder="输入番号，验证字段选择结果" required maxlength="64"><button class="button" type="submit">查询并合并</button></form><div id="priority-result" class="activity-note" role="status">使用已保存的优先级，仅查询已启用的插件；不下载或整理文件。</div></section>`;
+      container.innerHTML = `<section class="panel"><div class="panel-head"><div><h2>优先级设置（字段）</h2><p class="subtitle">为各个元数据字段配置刮削源优先级</p></div><div class="priority-quick"><select id="priority-quick-source" aria-label="选择要统一调整的数据源"${sources.length ? '' : ' disabled'}><option value="">选择数据源</option>${sources.map((source) => `<option value="${h(source.id)}">${h(source.name)}</option>`).join('')}</select><button class="button" type="button" id="priority-quick-top">全部字段设为最高</button><button class="button" type="button" id="priority-quick-bottom">全部字段设为最低</button></div></div><div class="notice priority-notice">只使用已启用的数据源，按每个字段自己的顺序查询。未配置来源的字段不抓取，不再使用全局补充。可拖动或使用箭头排序。</div>${fields.map((field) => row(field, fieldNames[field] || field)).join('')}<div class="savebar"><span id="priority-save-status">修改后记得保存</span><div><button class="button" id="reset-priorities" type="button">撤销修改</button> <button class="button primary" id="save-priorities" type="button">保存优先级</button></div></div></section><section class="panel"><div class="panel-head"><h2>按优先级查询</h2><small>展示字段来源</small></div><form class="path-bar" id="priority-query"><input class="search" name="number" aria-label="聚合查询番号" placeholder="输入番号，验证字段选择结果" required maxlength="64"><button class="button" type="submit">查询并合并</button></form><div id="priority-result" class="activity-note" role="status">使用已保存的优先级，仅查询已启用的插件；不下载或整理文件。</div></section>`;
       // 「按优先级查询」放在「优先级设置（字段）」上面。
       container.prepend(container.querySelector('#priority-query').closest('section'));
       container.querySelectorAll('[data-add]').forEach(
@@ -105,6 +105,21 @@ export async function mountPriorityEditor(container, sources, onDirty, onSaved) 
           changed();
         };
       });
+      // 对每个字段统一调整：先移除该数据源，再放到最前（最高）或最后（最低）；字段里没有它时直接加入。
+      const moveAll = (position) => {
+        const id = container.querySelector('#priority-quick-source').value;
+        if (!id) {
+          container.querySelector('#priority-save-status').textContent = '请先选择数据源';
+          return;
+        }
+        for (const field of fields) {
+          const list = order(field).filter((item) => item !== id);
+          setOrder(field, position === 'top' ? [id, ...list] : [...list, id]);
+        }
+        changed();
+      };
+      container.querySelector('#priority-quick-top').onclick = () => moveAll('top');
+      container.querySelector('#priority-quick-bottom').onclick = () => moveAll('bottom');
       container.querySelector('#reset-priorities').onclick = () => {
         draft = structuredClone(saved);
         onSaved();

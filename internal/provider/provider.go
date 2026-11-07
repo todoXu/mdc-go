@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ import (
 	"time"
 )
 
-//go:embed defaults/*/plugin.json defaults/*/main.js
+//go:embed defaults/*/plugin.json defaults/*/main.js defaults/*/config.json
 var defaults embed.FS
 
 type Manifest struct {
@@ -112,34 +113,125 @@ func New(dir string) (*Registry, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
+	if err := installBuiltins(dir); err != nil {
+		return nil, err
+	}
+	return &Registry{Dir: dir, last: map[string]time.Time{}}, nil
+}
+
+// installBuiltins 处理每个内置插件，启动时执行：
+//   - 插件目录不存在：整体复制内置文件夹（plugin.json、main.js、config.json）。
+//   - 目录存在且 plugin.json 的版本号与内置版本不同：覆盖 main.js 和 plugin.json。
+//   - 版本号相同：不做任何修改。
+//
+// config.json 和用户自己的其他文件在任何情况下都不动。
+func installBuiltins(dir string) error {
 	entries, err := defaults.ReadDir("defaults")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-		target := filepath.Join(dir, entry.Name())
-		if err := os.MkdirAll(target, 0700); err != nil {
-			return nil, err
-		}
-		for _, name := range []string{"plugin.json", "main.js"} {
-			path := filepath.Join(target, name)
-			if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-				data, err := defaults.ReadFile("defaults/" + entry.Name() + "/" + name)
-				if err != nil {
-					return nil, err
-				}
-				if err := os.WriteFile(path, data, 0600); err != nil {
-					return nil, err
-				}
-			} else if err != nil {
-				return nil, err
+		id := entry.Name()
+		target := filepath.Join(dir, id)
+		_, err := os.Lstat(target)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			if err := copyBuiltin(id, target); err != nil {
+				return fmt.Errorf("安装内置插件 %s: %w", id, err)
+			}
+			slog.Info("[plugin] 已安装内置插件", "id", id)
+		case err != nil:
+			return err
+		default:
+			updated, err := updateBuiltin(id, target)
+			if err != nil {
+				return fmt.Errorf("更新内置插件 %s: %w", id, err)
+			}
+			if updated {
+				slog.Info("[plugin] 内置插件版本已更新", "id", id)
 			}
 		}
 	}
-	return &Registry{Dir: dir, last: map[string]time.Time{}}, nil
+	return nil
+}
+
+// updateBuiltin 版本号与内置不同时，覆盖 main.js 和 plugin.json。
+// 先写 main.js 再写 plugin.json，中途失败时版本号还是旧的，下次启动会重新更新。
+func updateBuiltin(id, target string) (bool, error) {
+	embedded, err := defaults.ReadFile("defaults/" + id + "/plugin.json")
+	if err != nil {
+		return false, err
+	}
+	var want Manifest
+	if err := json.Unmarshal(embedded, &want); err != nil {
+		return false, err
+	}
+	installed, err := os.ReadFile(filepath.Join(target, "plugin.json"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if err == nil {
+		var have Manifest
+		if json.Unmarshal(installed, &have) == nil && have.Version == want.Version {
+			return false, nil
+		}
+	}
+	for _, name := range []string{"main.js", "plugin.json"} {
+		data, err := defaults.ReadFile("defaults/" + id + "/" + name)
+		if err != nil {
+			return false, err
+		}
+		if err := replaceFile(filepath.Join(target, name), data); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// replaceFile 先写临时文件再改名覆盖，避免写到一半留下残缺文件。
+func replaceFile(path string, data []byte) error {
+	temp := path + ".tmp"
+	if err := os.WriteFile(temp, data, 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(temp, path); err != nil {
+		os.Remove(temp)
+		return err
+	}
+	return nil
+}
+
+// copyBuiltin 先复制到临时目录再改名，中途失败不会留下只复制了一半的插件目录。
+func copyBuiltin(id, target string) error {
+	parent := filepath.Dir(target)
+	if err := os.MkdirAll(parent, 0700); err != nil {
+		return err
+	}
+	temp, err := os.MkdirTemp(parent, ".install-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(temp)
+	files, err := defaults.ReadDir("defaults/" + id)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		data, err := defaults.ReadFile("defaults/" + id + "/" + file.Name())
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(temp, file.Name()), data, 0600); err != nil {
+			return err
+		}
+	}
+	return os.Rename(temp, target)
 }
 func (r *Registry) List() ([]Manifest, error) {
 	entries, err := os.ReadDir(r.Dir)

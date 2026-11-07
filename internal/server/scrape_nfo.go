@@ -17,6 +17,10 @@ const (
 	nfoTagResolution = "resolution" // 按影片实际分辨率生成；在 Dropped 中表示被替换的刮削分辨率标签
 )
 
+// excludedScrapedTags 是数据源标签中不写入 NFO 的破解描述。键为小写并去掉首尾空白后的标签。
+// 破解类型只由文件名识别的 hack_type 标签表示，不使用数据源的描述。
+var excludedScrapedTags = map[string]bool{"無碼破解": true, "无码破解": true}
+
 // nfoTagEntry 是一个 NFO 标签及其来源：scraped、serial_name、actor、resolution、
 // mosaic、hack_type、subtitle、series、studio、publisher。
 type nfoTagEntry struct {

@@ -63,6 +63,22 @@
   font-size: 10px;
   max-width: 100%;
 }
+.priority-quick {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.priority-quick select {
+  height: 34px;
+  min-width: 180px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+}
 .priority-inherit {
   color: #a1abb9;
   font-size: 11px;

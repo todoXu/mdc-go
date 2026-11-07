@@ -28,7 +28,6 @@ var assets embed.FS
 // data 是纯运行时目录，启动时缺哪个就从默认复制哪个，之后程序只读写数据目录里的副本。
 var defaultDataFiles = map[string]string{
 	builtinActorMappingFile: "assets/mapping_actor_default.xml",
-	"providers.json":        "assets/providers_default.json",
 	"priorities.json":       "assets/priorities_default.json",
 }
 
@@ -57,30 +56,29 @@ type object = map[string]any
 
 // Server implements the observed frontend contract. It never contacts the old deployment.
 type Server struct {
-	mux                *http.ServeMux
-	mu                 sync.RWMutex
-	configs            map[string]json.RawMessage
-	defaults           map[string]json.RawMessage
-	statePath          string
-	providers          *provider.Registry
-	providerConfigs    map[string]provider.Config
-	providerConfigPath string
-	priorities         *provider.Priorities
-	priorityPath       string
-	imageRefs          map[string]imageRef
-	watchMu            sync.RWMutex
-	watchState         watchState
-	watchWake          chan struct{}
-	jobsMu             sync.RWMutex
-	historyMu          sync.Mutex
-	actorDir           actorDirectory
-	embyRefresh        embyRefresher
-	gallery            galleryIndex
-	jobs               []scrapeJob
-	jobSequence        int
-	jobWake            chan struct{}
-	scrapeSlots        scrapeLimiter
-	jobEvents          jobEventHub
+	mux             *http.ServeMux
+	mu              sync.RWMutex
+	configs         map[string]json.RawMessage
+	defaults        map[string]json.RawMessage
+	statePath       string
+	providers       *provider.Registry
+	providerConfigs map[string]provider.Config
+	priorities      *provider.Priorities
+	priorityPath    string
+	imageRefs       map[string]imageRef
+	watchMu         sync.RWMutex
+	watchState      watchState
+	watchWake       chan struct{}
+	jobsMu          sync.RWMutex
+	historyMu       sync.Mutex
+	actorDir        actorDirectory
+	embyRefresh     embyRefresher
+	gallery         galleryIndex
+	jobs            []scrapeJob
+	jobSequence     int
+	jobWake         chan struct{}
+	scrapeSlots     scrapeLimiter
+	jobEvents       jobEventHub
 }
 
 func New(dataDir string) (*Server, error) {
@@ -98,8 +96,6 @@ func NewWithPlugins(dataDir, pluginsDir string) (*Server, error) {
 		return nil, err
 	}
 	s.providers = registry
-	s.providerConfigs = make(map[string]provider.Config)
-	s.providerConfigPath = filepath.Join(dataDir, "providers.json")
 	s.priorityPath = filepath.Join(dataDir, "priorities.json")
 	if b, err := os.ReadFile(s.priorityPath); err == nil {
 		if err := json.Unmarshal(b, &s.priorities); err != nil || s.priorities == nil {
@@ -108,15 +104,9 @@ func NewWithPlugins(dataDir, pluginsDir string) (*Server, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	if b, err := os.ReadFile(s.providerConfigPath); err == nil {
-		if err := json.Unmarshal(b, &s.providerConfigs); err != nil {
-			return nil, fmt.Errorf("invalid provider config: %w", err)
-		}
-		if s.providerConfigs == nil {
-			return nil, fmt.Errorf("invalid provider config object")
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
+	s.providerConfigs, err = registry.LoadConfigs()
+	if err != nil {
+		return nil, fmt.Errorf("读取数据源配置失败：%w", err)
 	}
 	if b, err := assets.ReadFile("assets/defaults.json"); err != nil {
 		return nil, err

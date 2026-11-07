@@ -96,10 +96,12 @@ func TestPluginPackageAPIAndSavedPreferences(t *testing.T) {
 	var config struct {
 		Enabled bool `json:"enabled"`
 	}
-	if err := json.Unmarshal(call(s, "GET", "/api/providers/Example/config", "").Body.Bytes(), &config); err != nil || !config.Enabled {
+	// 删除插件时会连同它的 config.json 一起删除，重新安装后回到默认配置（未启用）。
+	if err := json.Unmarshal(call(s, "GET", "/api/providers/Example/config", "").Body.Bytes(), &config); err != nil || config.Enabled {
 		t.Fatal(config, err)
 	}
-	if err := json.Unmarshal(call(s, "GET", "/api/providers/priorities", "").Body.Bytes(), &priorities); err != nil || len(priorities.Config.ByFields["title"]) != 1 {
+	// 优先级不会自动恢复：重装后 Example 未启用，优先级列表只显示已启用的数据源。
+	if err := json.Unmarshal(call(s, "GET", "/api/providers/priorities", "").Body.Bytes(), &priorities); err != nil || len(priorities.Config.ByFields["title"]) != 0 {
 		t.Fatal(priorities, err)
 	}
 }
