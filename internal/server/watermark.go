@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"image"
-	"image/color"
 	"image/draw"
 	"image/jpeg"
 	"image/png"
@@ -13,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	xdraw "golang.org/x/image/draw"
 
 	"mdcng-go/internal/web"
 )
@@ -63,27 +64,8 @@ func decodeWatermarkImage(data []byte) (image.Image, error) {
 }
 
 func resizeBadge(source image.Image, width, height int) *image.RGBA {
-	bounds := source.Bounds()
-	input := image.NewRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
-	draw.Draw(input, input.Bounds(), source, bounds.Min, draw.Src)
 	out := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		sy := math.Max(0, (float64(y)+0.5)*float64(bounds.Dy())/float64(height)-0.5)
-		y0 := int(sy)
-		y1 := min(y0+1, bounds.Dy()-1)
-		fy := sy - float64(y0)
-		for x := 0; x < width; x++ {
-			sx := math.Max(0, (float64(x)+0.5)*float64(bounds.Dx())/float64(width)-0.5)
-			x0 := int(sx)
-			x1 := min(x0+1, bounds.Dx()-1)
-			fx := sx - float64(x0)
-			a, b, c, d := input.RGBAAt(x0, y0), input.RGBAAt(x1, y0), input.RGBAAt(x0, y1), input.RGBAAt(x1, y1)
-			blend := func(a, b, c, d uint8) uint8 {
-				return uint8(math.Round((float64(a)*(1-fx)+float64(b)*fx)*(1-fy) + (float64(c)*(1-fx)+float64(d)*fx)*fy))
-			}
-			out.SetRGBA(x, y, color.RGBA{blend(a.R, b.R, c.R, d.R), blend(a.G, b.G, c.G, d.G), blend(a.B, b.B, c.B, d.B), blend(a.A, b.A, c.A, d.A)})
-		}
-	}
+	xdraw.CatmullRom.Scale(out, out.Bounds(), source, source.Bounds(), xdraw.Src, nil)
 	return out
 }
 
