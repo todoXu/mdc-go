@@ -74,6 +74,7 @@ type Server struct {
 	historyChanged  historyChanges
 	historySaved    map[string]struct{} // 数据库里已有的任务 ID，由 historyMu 保护；nil 表示未知，下次保存整表重写
 	actorDir        actorDirectory
+	avatarFill      avatarFillState
 	embyRefresh     embyRefresher
 	gallery         galleryIndex
 	jobs            []scrapeJob
@@ -206,7 +207,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/system/monitor", s.monitor)
 	s.mux.HandleFunc("GET /api/emby/libraries", s.listEmbyLibraries)
 	s.mux.HandleFunc("GET /api/actors", s.listActors)
-	s.mux.HandleFunc("POST /api/actor-tools/fill-missing", s.fillMissingAvatars)
+	s.mux.HandleFunc("POST /api/actor-tools/fill-missing", s.startFillMissingAvatars)
+	s.mux.HandleFunc("GET /api/actor-tools/fill-missing", s.fillMissingAvatarStatus)
+	s.mux.HandleFunc("POST /api/actor-tools/fill-missing/cancel", s.cancelFillMissingAvatars)
 	s.mux.HandleFunc("POST /api/actor-gallery/{source}/refresh", s.refreshGallery)
 	s.mux.HandleFunc("GET /api/actor-gallery/{source}/image", s.galleryImageHandler)
 	s.mux.HandleFunc("GET /api/actors/{id}", s.getActor)

@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -538,82 +537,4 @@ func (s *Server) setActorImage(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Info("[actors] 已更新头像", "id", r.PathValue("id"), "source", request.Source)
 	writeJSON(w, 200, object{"success": true, "image": s.actorImageURL(embyActor{ID: r.PathValue("id"), ImageTag: tag})})
-}
-
-// fillMissingAvatars 提供 POST /api/actors/fill-missing：为 Emby 中没有头像的演员，
-// 使用 Gfriends 文件树里该演员的最后一张头像。已有头像的演员不处理。
-func (s *Server) fillMissingAvatars(w http.ResponseWriter, r *http.Request) {
-	// main.go 设置了写超时；补头像可能需要几分钟，这里清除它。
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
-	conn, err := s.embyConnection()
-	if err != nil {
-		embyFailure(w, err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Minute)
-	defer cancel()
-	actors, _, err := s.actorDir.load(ctx, conn, true)
-	if err != nil {
-		embyFailure(w, err)
-		return
-	}
-	if err := s.gallery.require(ctx, s, galleryGfriends); err != nil {
-		fail(w, 502, "gallery_unavailable", err.Error())
-		return
-	}
-	mapping, _, _ := s.actorMappingState()
-	gallery := s.gallery.snapshot()
-	type job struct {
-		actor embyActor
-		path  string
-	}
-	var jobs []job
-	missing, noImage := 0, 0
-	for _, actor := range actors {
-		if actor.ImageTag != "" {
-			continue
-		}
-		missing++
-		images := gallery.gfriendsImages(actorNames(actor.Name, mapping))
-		if len(images) == 0 {
-			noImage++
-			continue
-		}
-		jobs = append(jobs, job{actor: actor, path: images[len(images)-1].Path})
-	}
-	var mu sync.Mutex
-	updated, failed := 0, []string{}
-	queue := make(chan job)
-	var wg sync.WaitGroup
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for item := range queue {
-				data, err := s.gallery.image(ctx, s, galleryGfriends, item.path)
-				if err == nil {
-					_, err = s.uploadEmbyAvatar(ctx, conn, item.actor.ID, data)
-				}
-				mu.Lock()
-				if err != nil {
-					failed = append(failed, item.actor.Name+"："+err.Error())
-					slog.Warn("[actors] 补头像失败", "name", item.actor.Name, "error", err)
-				} else {
-					updated++
-				}
-				mu.Unlock()
-			}
-		}()
-	}
-	for _, item := range jobs {
-		if ctx.Err() != nil {
-			break
-		}
-		queue <- item
-	}
-	close(queue)
-	wg.Wait()
-	sort.Strings(failed)
-	slog.Info("[actors] 补头像完成", "missing", missing, "updated", updated, "no_gfriends", noImage, "failed", len(failed))
-	writeJSON(w, 200, object{"missing": missing, "updated": updated, "no_gfriends": noImage, "failed": failed})
 }

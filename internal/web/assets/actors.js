@@ -1,5 +1,49 @@
 import { api, escapeHTML as h } from './api.js';
 
+// 补头像进度：页面上的进度条显示已处理数、成功数、失败数和失败明细。
+function renderFillProgress(state) {
+  const box = document.querySelector('#fill-progress');
+  if (!box) return;
+  const done = state.done || 0;
+  const total = state.total || 0;
+  const failed = state.failed || [];
+  const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+  box.hidden = !state.running && !state.finished;
+  // 进度条每秒重绘，取消按钮用事件委托处理，不依赖按钮本身。
+  box.onclick = (event) => {
+    const cancel = event.target.closest('#fill-cancel');
+    if (cancel) cancelFill(cancel);
+  };
+  const title = state.running ? '正在补头像' : state.error === '已取消' ? '补头像已取消' : state.error ? '补头像中断' : '补头像完成';
+  box.innerHTML = `<div class="fill-progress-head"><b>${title}</b><span>${done} / ${total}</span><span class="fill-ok">成功 ${state.updated || 0}</span><span class="fill-bad">失败 ${failed.length}</span><span>Gfriends 无头像 ${state.no_gfriends || 0}</span>${state.running ? '<button class="button small" type="button" id="fill-cancel">取消补头像</button>' : ''}</div>`
+    + `<div class="fill-progress-bar"><i style="width:${pct}%"></i></div>`
+    + (state.error ? `<p class="fill-bad">${h(state.error)}</p>` : '')
+    + (failed.length ? `<details><summary>查看 ${failed.length} 条失败记录</summary><ul>${failed.map((item) => `<li>${h(item)}</li>`).join('')}</ul></details>` : '');
+}
+
+// 取消补头像：服务端停止后续处理，已上传的头像保留；进度条随轮询更新为「已取消」。
+async function cancelFill(button) {
+  button.disabled = true;
+  button.textContent = '正在取消…';
+  try {
+    await api('/api/actor-tools/fill-missing/cancel', { method: 'POST' });
+  } catch {
+    button.disabled = false;
+    button.textContent = '取消补头像';
+  }
+}
+
+// 轮询补头像状态直到任务结束，并刷新进度条；页面已经切走时停止。
+async function pollFillProgress() {
+  for (;;) {
+    if (!document.querySelector('#fill-progress')) return null;
+    const state = await api('/api/actor-tools/fill-missing');
+    renderFillProgress(state);
+    if (!state.running) return state;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
 // 演员管理：演员、头像、简介和关联影片来自 Emby；头像候选来自 Gfriends，写真来自 Jalbum。
 // 修改头像后上传回 Emby；编辑名字直接修改映射表（远程映射表只读）。
 
@@ -75,6 +119,7 @@ export async function actorsPage({ heading, toast, reload }) {
     html: heading('演员管理', `Emby 媒体库中的演员，名字按映射表显示。共 ${actors.length} 位`,
       '<div class="actor-heading-actions"><button class="button" type="button" id="actor-refresh">↻ 从 Emby 刷新</button><button class="button primary" type="button" id="actor-fill">🖼 为无头像演员补头像</button></div>')
       + `<div class="actor-sources">${Object.entries(data.sources || {}).map(([id, state]) => sourceCard(id, state)).join('')}</div>`
+      + '<div class="fill-progress" id="fill-progress" hidden></div>'
       + `<section class="panel"><div class="toolbar actor-toolbar"><div class="tabs">
           <button data-actor-filter="all">全部 ${actors.length}</button><button data-actor-filter="missing">无头像 ${missing}</button>
         </div><input class="search" id="actor-search" aria-label="搜索演员" placeholder="搜索名字、别名（简繁日均可）…"><select id="actor-sort" aria-label="排序"><option value="movies">按作品数 ↓</option><option value="name">按名字</option></select></div>
@@ -140,20 +185,35 @@ export async function actorsPage({ heading, toast, reload }) {
       document.querySelector('#actor-fill').onclick = async (event) => {
         if (!missing) { toast('所有演员都已有头像'); return; }
         if (!window.confirm(`为 ${missing} 位没有头像的演员补头像？\n每位演员使用 Gfriends 文件树中的最后一张头像，并上传到 Emby。已有头像的演员不会改动。`)) return;
-        const button = event.target;
+        try {
+          await api('/api/actor-tools/fill-missing', { method: 'POST' });
+        } catch (error) {
+          toast(error.message, true);
+          return;
+        }
+        runFill(event.target);
+      };
+      // 启动补头像后轮询进度；页面刷新时如果任务仍在进行，继续显示进度。
+      const runFill = async (button) => {
         button.disabled = true;
         button.textContent = '正在补头像…';
         try {
-          const result = await api('/api/actor-tools/fill-missing', { method: 'POST', timeout: 1200000 });
-          const failed = result.failed?.length || 0;
-          toast(`补头像完成：成功 ${result.updated} 位，Gfriends 中没有 ${result.no_gfriends} 位${failed ? `，失败 ${failed} 位` : ''}`, failed > 0);
+          const state = await pollFillProgress();
+          if (!state) return;
+          const failed = state.failed?.length || 0;
+          toast(state.error ? `补头像中断：${state.error}` : `补头像完成：成功 ${state.updated} 位，Gfriends 中没有 ${state.no_gfriends} 位${failed ? `，失败 ${failed} 位` : ''}`, Boolean(state.error) || failed > 0);
           await reload({ silent: true });
         } catch (error) {
           toast(error.message, true);
+        } finally {
           button.disabled = false;
           button.textContent = '🖼 为无头像演员补头像';
         }
       };
+      api('/api/actor-tools/fill-missing').then((state) => {
+        if (state.running) runFill(document.querySelector('#actor-fill'));
+        else if (state.finished) renderFillProgress(state);
+      }).catch(() => {});
       document.querySelectorAll('[data-refresh-source]').forEach((button) => {
         button.onclick = async () => {
           button.disabled = true;
