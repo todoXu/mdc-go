@@ -211,7 +211,7 @@
     "poster": true,
     "scale": 14,
     "start": 0,
-    "thumb": true,
+    "thumb": false,
     "watermark_censored": false,
     "watermark_censored_fixed": 5,
     "watermark_hack": true,

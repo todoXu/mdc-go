@@ -165,18 +165,26 @@ export function deleteRecordDialog(job, onDeleted) {
 }
 
 async function cropDialog(job, changed) {
+  // 原图来源只列各数据源的海报和缩略图。默认选中当前海报的实际来源：
+  // 直接使用某来源的海报时选「该来源 · 海报」，由某来源的缩略图裁剪时选「该来源 · 缩略图」。
   const sourceOptions=[];
-  const assets=[['poster','poster','海报'],['cover','thumb','缩略图'],['fanart','fanart','背景图']];
-  for (const [field,kind,label] of assets) {
-    if (job.metadata?.local_images?.[field]) sourceOptions.push(['local:'+kind,'本地'+label+'（可能已有水印）']);
-  }
-  if (job.metadata?.poster) sourceOptions.push(['poster','来源海报（重新下载）']);
-  if (job.metadata?.cover) sourceOptions.push(['cover','来源封面（重新下载）']);
+  // 本地已保存的海报和缩略图也可以选，但不作为默认项。
+  if (job.metadata?.local_images?.poster) sourceOptions.push(['local:poster','本地海报（可能已有水印）']);
+  if (job.metadata?.local_images?.cover) sourceOptions.push(['local:thumb','本地缩略图（可能已有水印）']);
+  const localCount=sourceOptions.length;
   for (const [id,source] of Object.entries(job.sources || {})) {
     if (source.poster) sourceOptions.push([id+':poster',id+' · 海报']);
     if (source.cover) sourceOptions.push([id+':cover',id+' · 缩略图']);
   }
-  const element=dialog('封面裁剪', `<div class="crop-source-row"><label>原图来源<select name="source">${sourceOptions.map(([key,label])=>`<option value="${h(key)}">${h(label)}</option>`).join('')}</select></label><button class="button" type="button" data-upload>手动选择</button><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden></div><div class="record-crop-layout"><div><canvas class="record-crop-canvas" tabindex="0" aria-label="裁剪框，拖动调整位置，滚轮或加减键调整大小，方向键移动"></canvas><label class="crop-zoom">框大小 <input name="zoom" type="range" min="1" max="4" step="0.01" value="1"><output>1.00×</output><button type="button" class="button small" data-reset>重置</button></label><p class="muted">拖动裁剪框移动位置；滚轮或双指调整框大小。方向键移动，Shift 加速，+ / − 调整大小，Home 重置。1.00× 是当前比例的最大框，数值越大框越小。</p><p class="muted" data-crop-size></p></div><aside><fieldset><legend>裁剪方式</legend>${[['Full','纵向（完整海报尺寸）'],['Emby','纵向（Emby 海报尺寸）'],['Landscape','横向']].map(([key,label],i)=>`<label><input type="radio" name="aspect" value="${key}" ${i===0?'checked':''}> ${label}</label>`).join('')}</fieldset><fieldset><legend>添加水印</legend><label><input type="checkbox" name="subtitle" ${job.has_subtitle?'checked':''}> 字幕</label><label>类型<select name="mosaic">${[['','无'],['is_uncensored','无码'],['is_ltx_hack','LTX'],['is_lada_hack','LADA'],['is_jav_hack','JAV'],['is_other_hack','破解']].map(([key,label])=>`<option value="${key}" ${job.file_info?.mosaic===key?'selected':''}>${label}</option>`).join('')}</select></label><label>分辨率<select name="resolution">${[['','无'],['4K','4K'],['8K','8K']].map(([key,label])=>`<option value="${key}" ${job.file_info?.resolution===key?'selected':''}>${label}</option>`).join('')}</select></label></fieldset><fieldset><legend>处理选项</legend><label><input type="checkbox" name="replace_thumb"> 同时用原图替换缩略图（不裁剪）</label></fieldset></aside></div>`, '提交','lg');
+  // 旧记录没有保存各数据源的结果时，只能按合并后的地址重新下载。
+  if (sourceOptions.length===localCount) {
+    if (job.metadata?.poster) sourceOptions.push(['poster','来源海报（重新下载）']);
+    if (job.metadata?.cover) sourceOptions.push(['cover','来源封面（重新下载）']);
+  }
+  const posterProvider=job.provenance?.poster;
+  const preferred=posterProvider ? posterProvider+(job.metadata?.poster_from_cover?':cover':':poster') : '';
+  const defaultSource=sourceOptions.some(([key])=>key===preferred) ? preferred : (sourceOptions[localCount] || sourceOptions[0])?.[0];
+  const element=dialog('封面裁剪', `<div class="crop-source-row"><label>原图来源<select name="source">${sourceOptions.map(([key,label])=>`<option value="${h(key)}" ${key===defaultSource?'selected':''}>${h(label)}</option>`).join('')}</select></label><button class="button" type="button" data-upload>手动选择</button><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden></div><div class="record-crop-layout"><div><canvas class="record-crop-canvas" tabindex="0" aria-label="裁剪框，拖动调整位置，滚轮或加减键调整大小，方向键移动"></canvas><label class="crop-zoom">框大小 <input name="zoom" type="range" min="1" max="4" step="0.01" value="1"><output>1.00×</output><button type="button" class="button small" data-reset>重置</button></label><p class="muted">拖动裁剪框移动位置；滚轮或双指调整框大小。方向键移动，Shift 加速，+ / − 调整大小，Home 重置。1.00× 是当前比例的最大框，数值越大框越小。</p><p class="muted" data-crop-size></p></div><aside><fieldset><legend>裁剪方式</legend>${[['Full','纵向（完整海报尺寸）'],['Emby','纵向（Emby 海报尺寸）'],['Landscape','横向']].map(([key,label],i)=>`<label><input type="radio" name="aspect" value="${key}" ${i===0?'checked':''}> ${label}</label>`).join('')}</fieldset><fieldset><legend>添加水印</legend><label><input type="checkbox" name="subtitle" ${job.has_subtitle?'checked':''}> 字幕</label><label>类型<select name="mosaic">${[['','无'],['is_uncensored','无码'],['is_ltx_hack','LTX'],['is_lada_hack','LADA'],['is_jav_hack','JAV'],['is_other_hack','破解']].map(([key,label])=>`<option value="${key}" ${job.file_info?.mosaic===key?'selected':''}>${label}</option>`).join('')}</select></label><label>分辨率<select name="resolution">${[['','无'],['4K','4K'],['8K','8K']].map(([key,label])=>`<option value="${key}" ${job.file_info?.resolution===key?'selected':''}>${label}</option>`).join('')}</select></label></fieldset><fieldset><legend>处理选项</legend><label><input type="checkbox" name="replace_thumb"> 同时用原图替换缩略图（不裁剪）</label></fieldset></aside></div>`, '提交','lg');
   const canvas=element.querySelector('canvas'), ctx=canvas.getContext('2d'), zoom=element.querySelector('[name=zoom]'), select=element.querySelector('[name=source]'), submit=element.querySelector('[type=submit]'), error=element.querySelector('[role=alert]');
   let image, body='', scale=1, x=0, y=0, frame, loading=0, cropMethod='Center', face={found:false,x:0,y:0};
   let disposed=false;
@@ -213,7 +221,7 @@ async function cropDialog(job, changed) {
     ctx.fillStyle='#0009'; ctx.fillRect(0,0,canvas.width,canvas.height);
     const r={x:rect.x*factor,y:rect.y*factor,w:rect.width*factor,h:rect.height*factor};
     ctx.drawImage(image,rect.x,rect.y,rect.width,rect.height,r.x,r.y,r.w,r.h);
-    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.strokeRect(r.x,r.y,r.w,r.h);
+    ctx.strokeStyle='#ff2d2d'; ctx.lineWidth=3; ctx.strokeRect(r.x,r.y,r.w,r.h);
     frame=rect;
     element.querySelector('output').textContent=scale.toFixed(2)+'×';
     const method={None:'不裁剪',Right:'右侧',Center:'中心',Face:face.found?'人脸':'人脸（未检测到，中心）'}[cropMethod] || cropMethod;

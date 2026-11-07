@@ -34,7 +34,8 @@ function flagTags(row) {
   const tags = [];
   if (info.has_subtitle ?? row.has_subtitle) tags.push(`<span class="record-flag record-flag-sub" title="${h(info.subtitle_marker ? `字幕标记：${info.subtitle_marker}` : '中文字幕')}">中字</span>`);
   if (mosaicLabels[info.mosaic]) tags.push(`<span class="record-flag record-flag-hack" title="${h(info.mosaic_marker ? `识别标记：${info.mosaic_marker}` : '')}">${mosaicLabels[info.mosaic]}</span>`);
-  if (info.resolution) tags.push(`<span class="record-flag record-flag-res">${h(info.resolution)}</span>`);
+  // 表格只标记超高清（4K、8K），其它分辨率（如 1080P）不显示。
+  if (['4K', '8K'].includes(String(info.resolution || '').toUpperCase())) tags.push(`<span class="record-flag record-flag-res">${h(info.resolution)}</span>`);
   return tags.join('');
 }
 
@@ -531,6 +532,12 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
     document.querySelectorAll('[data-record-more]').forEach((button) => {
       button.onclick = () => openMenu(visible[Number(button.dataset.recordMore)], button);
     });
+    // 按页全选：选中本页时先取消其它页的选择，使已选数量最多等于当前页的条数；
+    // 取消本页时只移除本页的记录，不影响其它页（其它页的选择只可能来自「全选全部」）。
+    const selectPage = (checked) => {
+      if (checked) selected.clear();
+      visible.forEach((row) => { if (checked) selected.add(row.id); else selected.delete(row.id); });
+    };
     const selectionChanged = () => {
       const count = visible.filter((row) => selected.has(row.id)).length;
       $('#record-select-all').checked = count > 0 && count === visible.length;
@@ -555,12 +562,12 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
       box.onchange = () => { const id = visible[Number(box.dataset.recordSelect)].id; if (box.checked) selected.add(id); else selected.delete(id); selectionChanged(); };
     });
     $('#record-select-all').onchange = (event) => {
-      visible.forEach((row) => { if (event.target.checked) selected.add(row.id); else selected.delete(row.id); });
+      selectPage(event.target.checked);
       render();
     };
     $('#record-select-page').onclick = () => {
       const all = visible.length > 0 && visible.every((row) => selected.has(row.id));
-      visible.forEach((row) => { if (all) selected.delete(row.id); else selected.add(row.id); });
+      selectPage(!all);
       render();
     };
     selectionChanged();

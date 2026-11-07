@@ -111,7 +111,44 @@ func (s *Server) prepareScrapeImages(ctx context.Context, path, base string, met
 		sources[id] = data
 		return data, nil
 	}
+	// posterFromCrop 记录最近一次选中的海报是否由缩略图裁剪得到。
+	posterFromCrop := false
+	// posterFromSource 取某个来源的海报：先用它自己的竖版海报；没有，就用它自己的缩略图按「常规作品海报裁剪方式」裁剪。
+	// cropped 为 true 表示海报是由缩略图裁剪得到的。两者都没有时返回错误，由调用方尝试下一个来源。
+	posterFromSource := func(id string, data provider.Metadata, address string) (downloadedImage, bool, error) {
+		var lastErr error
+		if address != "" {
+			candidate, err := read(id, address, data.SourceURL)
+			if err == nil && candidate.height > candidate.width {
+				return candidate, false, nil
+			}
+			if err == nil {
+				err = fmt.Errorf("海报 %d×%d 不是竖版", candidate.width, candidate.height)
+			}
+			lastErr = err
+		}
+		method := posterCropMethod(meta.Number, path, settings)
+		if method == "None" || data.Cover == "" {
+			if lastErr == nil {
+				lastErr = fmt.Errorf("没有竖版海报，也没有可裁剪的缩略图")
+			}
+			return downloadedImage{}, false, lastErr
+		}
+		cover, err := read(id, data.Cover, data.SourceURL)
+		if err != nil {
+			return downloadedImage{}, false, err
+		}
+		cropped, err := cropPoster(ctx, cover, method, settings.Download.Aspect)
+		if err != nil {
+			return downloadedImage{}, false, err
+		}
+		cropped.provider, cropped.url = id, data.Cover
+		return cropped, true, nil
+	}
 	selectImage := func(field string, quality bool) (downloadedImage, error) {
+		if field == "poster" {
+			posterFromCrop = false
+		}
 		order := append([]string{}, priorities.ByFields[field]...)
 		selected := provenance[field]
 		if selected == "" && meta.Provider != "merged" {
@@ -164,12 +201,20 @@ func (s *Server) prepareScrapeImages(ctx context.Context, path, base string, met
 				// 数据源失败已在详细数据中显示，这里不再重复记为警告；该来源的图片直接跳过。
 				continue
 			}
-			if address == "" {
-				continue
-			}
-			candidate, err := read(id, address, data.SourceURL)
-			if err == nil && field == "cover" && (candidate.width < settings.Download.MinWidth || candidate.height < settings.Download.MinHeight) {
-				err = fmt.Errorf("缩略图 %d×%d 低于最小尺寸 %d×%d", candidate.width, candidate.height, settings.Download.MinWidth, settings.Download.MinHeight)
+			var candidate downloadedImage
+			var err error
+			cropped := false
+			if field == "poster" {
+				// 海报按来源处理：本来源没有竖版海报时，用它自己的缩略图裁剪，不足则换下一个来源。
+				candidate, cropped, err = posterFromSource(id, data, address)
+			} else {
+				if address == "" {
+					continue
+				}
+				candidate, err = read(id, address, data.SourceURL)
+				if err == nil && field == "cover" && (candidate.width < settings.Download.MinWidth || candidate.height < settings.Download.MinHeight) {
+					err = fmt.Errorf("缩略图 %d×%d 低于最小尺寸 %d×%d", candidate.width, candidate.height, settings.Download.MinWidth, settings.Download.MinHeight)
+				}
 			}
 			if err != nil {
 				message := field + " [" + id + "]：" + err.Error()
@@ -180,6 +225,7 @@ func (s *Server) prepareScrapeImages(ctx context.Context, path, base string, met
 			traceScrape(ctx, "选择图片", fmt.Sprintf("%s [%s]：%d×%d", field, id, candidate.width, candidate.height))
 			if best.data == nil || int64(candidate.width)*int64(candidate.height) > int64(best.width)*int64(best.height) {
 				best = candidate
+				posterFromCrop = cropped && field == "poster"
 			}
 			if !quality {
 				break
@@ -205,8 +251,9 @@ func (s *Server) prepareScrapeImages(ctx context.Context, path, base string, met
 	}
 	if settings.Download.Poster {
 		poster, posterErr = selectImage("poster", false)
-		posterFromCover := false
-		if posterErr == nil && settings.Download.CropPoster {
+		// 由缩略图裁剪得到的海报不再做独立海报的居中裁剪。
+		posterFromCover := posterFromCrop && posterErr == nil
+		if posterErr == nil && settings.Download.CropPoster && !posterFromCover {
 			poster, posterErr = cropPoster(ctx, poster, "Center", settings.Download.Aspect)
 		}
 		if posterErr != nil && !needCover {
