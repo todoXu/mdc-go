@@ -2,6 +2,7 @@
 # go build 生成的程序
 /mdc-go.exe
 /mdc-go-linux*
+/mdc-go
 /bin/
 # tools/build.ps1 生成的单文件程序
 /dist/
