@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,6 +53,10 @@ func removeScrapeProducts(path string, settings scrapeSettings) ([]string, error
 		return nil, fmt.Errorf("解析视频路径失败：%w", err)
 	}
 	entries, err := os.ReadDir(filepath.Dir(videoPath))
+	if errors.Is(err, os.ErrNotExist) {
+		// 产物所在文件夹已被删除，没有需要清理的文件，重试可以继续。
+		return []string{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
