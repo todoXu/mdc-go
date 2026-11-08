@@ -63,6 +63,9 @@ func (s *Server) verifyActorMapping(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "save_failed", "保存自定义演员映射表失败："+err.Error())
 		return
 	}
+	if updated {
+		go s.stopJobsForConfigChange()
+	}
 	writeJSON(w, 200, object{"valid": true, "document_url": document, "updated": updated})
 }
 
@@ -86,6 +89,9 @@ func (s *Server) checkActorMapping(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fail(w, 502, "check_failed", err.Error())
 		return
+	}
+	if updated {
+		go s.stopJobsForConfigChange()
 	}
 	writeJSON(w, 200, object{"success": true, "updated": updated})
 }

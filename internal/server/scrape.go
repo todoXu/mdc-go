@@ -43,6 +43,7 @@ type scrapeJob struct {
 	Warnings      []string                     `json:"warnings,omitempty"`
 	Settings      *scrapeSettings              `json:"-"`
 	Cancel        context.CancelFunc           `json:"-"`
+	StopNote      string                       `json:"stop_note,omitempty"` // 配置改变等原因自动停止时的提示
 	StopRequested bool                         `json:"stop_requested,omitempty"`
 	Reorganize    bool                         `json:"-"`
 	ReorgFrom     string                       `json:"-"` // 自动重新整理前的旧输出文件，成功后清理

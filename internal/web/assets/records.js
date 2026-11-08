@@ -68,7 +68,7 @@ function secondLineHTML(row) {
   if (row.status === 1) return `<div class="record-info record-info-run record-progress" data-job-id="${h(row.id)}">${h(row.stop_requested ? '正在终止…' : row.progress || '开始处理…')}</div>`;
   if (row.status === 0) return '<div class="record-info record-info-muted">排队等待处理</div>';
   if (row.status === -1) return `<div class="record-info record-info-err">${h(row.error || '处理失败')}</div>`;
-  if (row.status === -2) return '<div class="record-info record-info-muted">已终止</div>';
+  if (row.status === -2) return `<div class="record-info record-info-muted">${h(row.stop_note || '已终止')}</div>`;
   return '';
 }
 

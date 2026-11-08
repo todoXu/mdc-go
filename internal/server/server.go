@@ -375,7 +375,18 @@ func (s *Server) putConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "save_failed", "无法保存本地配置")
 		return
 	}
+	changed := !jsonEqual(current, next)
 	s.configs = updated
+	if section == "common" {
+		if removed := removedWatchDirectories(current, next); len(removed) > 0 {
+			// 持有 s.mu，删除记录需放到后台执行。
+			go s.removeWatchDirectoryRecords(removed)
+		}
+	}
+	if changed {
+		// 在持有 s.mu 时不能等待 jobsMu，所以放到后台执行。
+		go s.stopJobsForConfigChange()
+	}
 	if section == "common" {
 		select {
 		case s.watchWake <- struct{}{}:

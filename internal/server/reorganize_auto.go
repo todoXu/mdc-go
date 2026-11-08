@@ -62,7 +62,7 @@ func (s *Server) queueReorganize(id, from string) {
 		item.Source = "reorganize"
 		item.Status = 0
 		item.StartedAt, item.CompletedAt, item.Error = "", "", ""
-		item.DurationMS, item.Cancel, item.StopRequested, item.Warnings = 0, nil, false, nil
+		item.DurationMS, item.Cancel, item.StopRequested, item.Warnings, item.StopNote = 0, nil, false, nil, ""
 		item.Logs = []scrapeEvent{{Time: time.Now().Format(time.RFC3339Nano), Stage: "自动重新整理", Message: "元数据字段已变化，按新设置重新整理文件"}}
 		s.publishJobChanged(item.ID, true)
 		queued = true

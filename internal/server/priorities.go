@@ -147,11 +147,16 @@ func (s *Server) putPriorities(w http.ResponseWriter, r *http.Request) {
 	if p.ByFields == nil {
 		p.ByFields = map[string][]string{}
 	}
+	before, _ := json.Marshal(s.priorities)
 	if err := save(s.priorityPath, p); err != nil {
 		fail(w, 500, "save_failed", "无法保存优先级")
 		return
 	}
 	s.priorities = p
+	if after, _ := json.Marshal(p); !jsonEqual(before, after) {
+		// 持有 s.mu，停止任务需放到后台执行。
+		go s.stopJobsForConfigChange()
+	}
 	writeJSON(w, 200, object{"success": true})
 }
 func (s *Server) fetchByPriority(w http.ResponseWriter, r *http.Request) {

@@ -407,7 +407,7 @@ func (s *Server) requeueJobLocked(job *scrapeJob, action string, request taskReq
 	next.Directory = filepath.Dir(path)
 	next.Status = 0
 	next.StartedAt, next.CompletedAt, next.Output, next.Error = "", "", "", ""
-	next.DurationMS, next.Cancel, next.StopRequested, next.Warnings = 0, nil, false, nil
+	next.DurationMS, next.Cancel, next.StopRequested, next.Warnings, next.StopNote = 0, nil, false, nil, ""
 	*job = next
 	s.publishJobChanged(next.ID, true)
 	return nil
