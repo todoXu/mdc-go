@@ -1074,7 +1074,7 @@ function fields(object, prefix = []) {
           available.unshift([value, value]);
         input = `<select ${attributes} data-type="${typeof value === 'number' ? 'number' : 'string'}">${available.map(([v, n]) => `<option value="${h(v)}" ${String(v) === String(value) ? 'selected' : ''}>${h(n)}</option>`).join('')}</select>`;
       } else {
-        const secret = /(?:api_key|openai_key|cookies|password)$/.test(key);
+        const secret = /(?:api_key|openai_key|password)$/.test(key);
         input = `<input ${attributes} type="${typeof value === 'number' ? 'number' : secret ? 'password' : 'text'}" ${typeof value === 'number' ? 'min="0" step="any"' : ''} ${secret ? 'autocomplete="new-password"' : ''} data-type="${value === null ? 'nullable' : typeof value}" value="${h(value ?? '')}" ${value === null ? 'placeholder="未设置（可留空）"' : ''}>`;
       }
       const hint = Array.isArray(value)

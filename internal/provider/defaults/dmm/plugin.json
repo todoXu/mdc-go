@@ -1,0 +1,9 @@
+{
+  "api_version": 2,
+  "id": "dmm",
+  "name": "DMM",
+  "version": "1.0.2",
+  "engine": "javascript-v1",
+  "base_url": "https://www.dmm.co.jp",
+  "input_hint": "需先在数据源配置中填写 Cookies：age_check_done=1（在浏览器中完成年龄确认后获得）"
+}

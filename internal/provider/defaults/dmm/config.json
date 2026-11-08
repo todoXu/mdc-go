@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "base_url": "https://www.dmm.co.jp",
+  "cookies": "age_check_done=1",
+  "user_agent": "",
+  "proxy": "",
+  "cooldown_seconds": 0,
+  "request_timeout": 0,
+  "trailer_timeout": 0,
+  "retry_times": 0,
+  "options": {}
+}
