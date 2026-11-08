@@ -71,7 +71,7 @@
   },
   "custom": {
     "rules": [],
-    "watermark_enabled": true
+    "watermark_enabled": false
   },
   "download": {
     "crop_aspect": "Full",

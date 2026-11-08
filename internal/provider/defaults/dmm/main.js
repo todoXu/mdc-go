@@ -63,8 +63,12 @@ function locate(input) {
   }
   // 标准版（无后缀）优先；只有没有标准版时才使用带后缀的版本。
   var detail = plain.length ? plain : other;
-  if (!detail.length) fail("not_found", "搜索结果中没有找到完全匹配的番号");
-  if (detail.length > 1) fail("ambiguous_number", "存在多个同番号作品，请在搜索结果中确认");
+  // 没有完全匹配的番号时，直接使用搜索结果的第一条作为作品。
+  if (!detail.length) {
+    var first = nodes(search, "a[href*='/detail/=/cid=']")[0];
+    if (!first || !first.attrs.href) fail("not_found", "搜索结果中没有任何作品");
+    detail.push(first.attrs.href);
+  }
   return {number: number, path: detail[0]};
 }
 var plugin = {
