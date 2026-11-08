@@ -635,6 +635,9 @@ func (s *Server) runScrapeJob(id string, timeout time.Duration) {
 	}
 	s.publishJobFinished(id)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			slog.Warn("[scrape] 刮削超时，已终止", "id", id, "path", job.Path, "timeout", timeout)
+		}
 		slog.Warn("[scrape] 刮削失败", "id", id, "path", job.Path, "error", err)
 		return
 	}
@@ -1366,6 +1369,9 @@ func (s *Server) scrapeInPlace(ctx context.Context, path, override string, setti
 		}
 		elapsed := time.Since(started).Seconds()
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || ctx.Err() == context.DeadlineExceeded {
+				slog.Warn("[scrape] 数据源请求超时", "source", id, "elapsed_seconds", elapsed, "error", err)
+			}
 			traceScrape(ctx, "刮削数据", fmt.Sprintf("抓取失败, 用时 %.3fs <%s>：%s", elapsed, id, err.Error()))
 			recordFailure(id, err)
 			return meta, err

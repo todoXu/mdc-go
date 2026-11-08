@@ -22,6 +22,9 @@ type probeStreams struct {
 	} `json:"streams"`
 }
 
+// resolutionProbeTimeout 是 ffprobe 读取视频分辨率的最长时间，超过就终止进程。
+const resolutionProbeTimeout = 8 * time.Second
+
 func detectRealResolution(path string) string {
 	if strings.EqualFold(filepath.Ext(path), ".strm") {
 		slog.Debug("[resolution] STRM 文件跳过真实分辨率探测", "path", path)
@@ -31,15 +34,17 @@ func detectRealResolution(path string) string {
 		slog.Debug("[resolution] 视频文件不可访问，跳过真实分辨率探测", "path", path, "error", err)
 		return ""
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	started := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), resolutionProbeTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,codec_type", "-of", "json", path).Output()
 	if err != nil {
 		switch {
 		case errors.Is(err, exec.ErrNotFound):
 			slog.Debug("[resolution] 未找到 ffprobe（需安装并加入 PATH），跳过真实分辨率探测", "path", path)
-		case errors.Is(err, context.DeadlineExceeded):
-			slog.Debug("[resolution] ffprobe 探测超时，跳过真实分辨率探测", "path", path)
+		// 超时后进程被杀，Go 返回的是 "signal: killed"，所以要看 ctx.Err() 判断是否超时。
+		case ctx.Err() == context.DeadlineExceeded:
+			slog.Warn("[resolution] ffprobe 超时已终止，跳过真实分辨率探测", "path", path, "timeout", resolutionProbeTimeout, "elapsed", time.Since(started).Round(time.Millisecond))
 		default:
 			slog.Debug("[resolution] ffprobe 执行失败，跳过真实分辨率探测", "path", path, "error", err)
 		}
