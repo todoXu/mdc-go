@@ -185,6 +185,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/scrape/jobs/{id}/nfo", s.getScrapeJobNFO)
 	s.mux.HandleFunc("POST /api/scrape/jobs/{id}/{action}", s.scrapeJobAction)
 	s.mux.HandleFunc("POST /api/scrape/batch/retry", s.batchRetryScrapeJobs)
+	s.mux.HandleFunc("GET /api/custom-rules/keywords", s.getCustomKeywords)
+	s.mux.HandleFunc("POST /api/custom-rules/preview", s.previewCustomRules)
+	s.mux.HandleFunc("GET /api/custom-watermarks", s.listCustomWatermarks)
+	s.mux.HandleFunc("GET /api/custom-watermarks/{name}", s.serveCustomWatermark)
+	s.mux.HandleFunc("PUT /api/custom-watermarks/{name}", s.uploadCustomWatermark)
+	s.mux.HandleFunc("DELETE /api/custom-watermarks/{name}", s.deleteCustomWatermark)
 	s.mux.HandleFunc("DELETE /api/scrape/jobs/{id}", s.deleteScrapeJob)
 	s.mux.HandleFunc("GET /api/system/database", s.getScrapeDatabaseStatus)
 	s.mux.HandleFunc("GET /api/system/folders", s.listLocalFolders)
@@ -260,6 +266,18 @@ func (s *Server) putConfig(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "invalid_watch_config", err.Error())
 			return
 		}
+		if err := validateCommonAgainstCustom(next, s.configs["custom"]); err != nil {
+			fail(w, 400, "keyword_conflict", err.Error())
+			return
+		}
+	}
+	if section == "custom" {
+		normalized, err := s.validateCustomSection(next, s.configs["common"])
+		if err != nil {
+			fail(w, 400, "invalid_custom_rules", err.Error())
+			return
+		}
+		next = normalized
 	}
 	if section == "download" {
 		if err := validateDownloadConfig(next); err != nil {

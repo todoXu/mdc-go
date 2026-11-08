@@ -168,7 +168,7 @@ function nfoRow([label, written, scraped, field], mappings) {
 
 const tagOrigins = {
   serial_name: '番号前缀', actor: '演员', resolution: '按影片实际分辨率生成', mosaic: '马赛克类型',
-  hack_type: '破解类型', subtitle: '字幕', series: '系列格式', studio: '片商格式', publisher: '发行格式',
+  hack_type: '破解类型', subtitle: '字幕', series: '系列格式', studio: '片商格式', publisher: '发行格式', custom: '自定义规则',
 };
 
 // 优先使用生成 NFO 时记录的标签来源；旧记录或文件被外部修改时才退回按文字比对。

@@ -480,7 +480,8 @@ func (s *Server) cropScrapePoster(w http.ResponseWriter, r *http.Request) {
 	for _, key := range []string{"enabled", "poster", "thumb", "watermark_subtitle", "watermark_ltx", "watermark_lada", "watermark_jav", "watermark_hack", "watermark_uncensored", "watermark_censored", "watermark_resolution"} {
 		settings.Watermark[key] = true
 	}
-	flags := filenameFlags{HasSubtitle: request.Subtitle, Mosaic: request.Mosaic, Resolution: request.Resolution}
+	// 系统水印按窗口里的选择；自定义规则的水印按文件名命中结果保留。
+	flags := filenameFlags{HasSubtitle: request.Subtitle, Mosaic: request.Mosaic, Resolution: request.Resolution, Custom: job.FileInfo.Custom}
 	base := strings.TrimSuffix(job.Output, filepath.Ext(job.Output))
 	writes := map[string][]byte{}
 	kinds := []string{"poster"}

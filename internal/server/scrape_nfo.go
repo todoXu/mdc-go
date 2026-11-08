@@ -15,6 +15,7 @@ const maxRecordNFOBytes = 1 << 20
 const (
 	nfoTagScraped    = "scraped"    // 数据源刮削的原标签
 	nfoTagResolution = "resolution" // 按影片实际分辨率生成；在 Dropped 中表示被替换的刮削分辨率标签
+	nfoTagCustom     = "custom"     // 文件名命中的自定义规则
 )
 
 // excludedScrapedTags 是数据源标签中不写入 NFO 的破解描述。键为小写并去掉首尾空白后的标签。

@@ -36,6 +36,8 @@ function flagTags(row) {
   if (mosaicLabels[info.mosaic]) tags.push(`<span class="record-flag record-flag-hack" title="${h(info.mosaic_marker ? `识别标记：${info.mosaic_marker}` : '')}">${mosaicLabels[info.mosaic]}</span>`);
   // 表格只标记超高清（4K、8K），其它分辨率（如 1080P）不显示。
   if (['4K', '8K'].includes(String(info.resolution || '').toUpperCase())) tags.push(`<span class="record-flag record-flag-res">${h(info.resolution)}</span>`);
+  // 命中的自定义规则，显示关键词。
+  for (const rule of info.custom || []) tags.push(`<span class="record-flag record-flag-custom" title="自定义规则：${h(rule.keyword)}">${h(rule.keyword)}</span>`);
   return tags.join('');
 }
 

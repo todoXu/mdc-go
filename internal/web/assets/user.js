@@ -1,6 +1,6 @@
 import { api, escapeHTML as h } from './api.js';
 
-const nav = `<nav class="settings-nav"><a href="#/settings/common">整理</a><a href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a href="#/settings/watermark">水印</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a class="active" href="#/settings/user">用户</a></nav>`;
+const nav = `<nav class="settings-nav"><a href="#/settings/common">整理</a><a href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a href="#/settings/watermark">系统水印</a><a href="#/settings/custom">自定义规则</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a class="active" href="#/settings/user">用户</a></nav>`;
 
 export function applyUserProfile(profile) {
   const badge = document.querySelector('#profile-avatar');

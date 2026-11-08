@@ -9,6 +9,7 @@ import { watchSettings } from './watch.js';
 import { downloadSettings } from './download.js';
 import { namingSettings } from './naming.js';
 import { watermarkSettings } from './watermark.js';
+import { customRulesSettings } from './custom-rules.js';
 import { metadataSettings } from './metadata.js';
 import { nfoSettings } from './nfo.js';
 import { systemSettings } from './system.js';
@@ -96,7 +97,7 @@ const labels = {
   resolution_uhd8: '8K 标记',
   add_chs_to_subtitle: '添加中文字幕标记',
   enabled: '启用',
-  custom_folder: '自定义水印目录',
+  custom_folder: '系统水印图片目录',
   mode: '水印排列方向',
   start: '起始位置',
   scale: '缩放比例',
@@ -356,6 +357,8 @@ async function route(options = {}) {
       view = await namingSettings(settingsCallbacks);
     else if (path === '/settings/watermark')
       view = await watermarkSettings(settingsCallbacks);
+    else if (path === '/settings/custom')
+      view = await customRulesSettings(settingsCallbacks);
     else if (path === '/metadata') {
       location.replace('#/settings/metadata');
       return;
@@ -818,7 +821,7 @@ async function settings() {
   return {
     html:
       heading('设置', '先配置媒体文件的整理方式。') +
-      `<div class="settings-layout"><nav class="settings-nav"><a class="active" href="#/settings/common">整理</a><a href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a href="#/settings/watermark">水印</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a href="#/settings/user">用户</a></nav><form id="settings-form" class="panel">
+      `<div class="settings-layout"><nav class="settings-nav"><a class="active" href="#/settings/common">整理</a><a href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a href="#/settings/watermark">系统水印</a><a href="#/settings/custom">自定义规则</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a href="#/settings/user">用户</a></nav><form id="settings-form" class="panel">
         <div class="download-section-title"><h2>整理方式</h2></div>
         <div class="field"><label class="field-label" for="organize-folder">整理目录<small>移动和 STRM 模式下的目标目录，点击按钮浏览本机文件夹</small></label><div class="folder-control"><input id="organize-folder" type="text" value="${h(value.target_folder || '')}" placeholder="请选择目录" readonly><button class="button small" type="button" id="pick-organize-folder">选择目录…</button></div></div>
         <div class="field"><label class="field-label" for="organize-mode">整理模式<small id="organize-mode-help"></small></label><select id="organize-mode">${modes.map(([id, name]) => `<option value="${id}" ${Number(value.link_mode) === Number(id) ? 'selected' : ''}>${name}</option>`).join('')}</select></div>

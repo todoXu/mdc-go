@@ -3080,3 +3080,83 @@ main.page-zoom .logs-view { height: calc(60vh / var(--ui-zoom)); }
 .fill-progress .fill-bad { color: #c2410c; }
 .fill-progress details { margin-top: 6px; font-size: 13px; }
 .fill-progress details ul { margin: 6px 0 0; padding-left: 18px; max-height: 180px; overflow: auto; }
+
+/* 设置 → 自定义规则 */
+.record-flag-custom { background: #edf2ff; color: var(--blue); }
+.custom-rules-settings .custom-checker { background: repeating-conic-gradient(#f1f3f6 0 25%, #fff 0 50%) 0 0 / 10px 10px; }
+.custom-rules-settings .custom-library { padding: 18px 25px 20px; }
+.custom-rules-settings .custom-mark-grid { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+.custom-rules-settings .custom-mark-card { position: relative; width: 176px; border: 1px solid #e1e6ee; border-radius: 8px; background: #fff; overflow: hidden; }
+.custom-rules-settings .custom-mark-image { height: 70px; display: flex; align-items: center; justify-content: center; padding: 10px; border-bottom: 1px solid #f0f2f5; }
+.custom-rules-settings .custom-mark-image img { max-width: 100%; max-height: 100%; }
+.custom-rules-settings .custom-mark-info { padding: 7px 10px 8px; }
+.custom-rules-settings .custom-mark-name { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.custom-rules-settings .custom-mark-meta { font-size: 10px; color: #a3abba; margin-top: 2px; }
+.custom-rules-settings .custom-mark-delete { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: #ffffffdd; color: #94a0b0; font-size: 14px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+.custom-rules-settings .custom-mark-card:hover .custom-mark-delete, .custom-rules-settings .custom-mark-delete:focus-visible { opacity: 1; }
+.custom-rules-settings .custom-mark-delete:hover { color: #b42318; }
+.custom-rules-settings .custom-mark-empty { width: 100%; padding: 22px; border: 1px dashed #d5dce7; border-radius: 8px; text-align: center; color: #a3abba; font-size: 12px; }
+.custom-rules-settings .custom-library-actions { display: flex; align-items: center; gap: 12px; font-size: 11px; color: #a3abba; }
+
+.custom-rules-settings .custom-rule-head, .custom-rules-settings .custom-rule-row {
+  display: grid;
+  grid-template-columns: 28px minmax(110px, 1fr) minmax(100px, 0.9fr) 150px minmax(100px, 0.9fr) minmax(170px, 1.2fr) 112px 32px;
+  gap: 12px;
+  align-items: start;
+  padding: 0 25px;
+}
+.custom-rules-settings .custom-rule-head { padding-top: 14px; padding-bottom: 8px; color: #94a0b0; font-size: 11px; border-bottom: 1px solid #f0f2f5; }
+.custom-rules-settings .custom-rule-row { padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid #f0f2f5; }
+.custom-rules-settings .custom-rule-row:hover { background: #fafbfd; }
+.custom-rules-settings .custom-rule-index { height: 36px; display: flex; align-items: center; justify-content: center; color: #a3abba; font-size: 12px; font-variant-numeric: tabular-nums; }
+.custom-rules-settings .custom-rule-row input, .custom-rules-settings .custom-rule-row select, .custom-rules-settings .custom-preview-input input {
+  width: 100%; min-width: 0; height: 36px; border: 1px solid #e1e6ee; border-radius: 6px;
+  background: #fcfdff; color: #667387; padding: 0 11px; font-size: 14px; font-family: inherit;
+}
+.custom-rules-settings .custom-rule-row input:focus, .custom-rules-settings .custom-rule-row select:focus, .custom-rules-settings .custom-preview-input input:focus { border-color: #8aa6e8; outline: 2px solid #edf2ff; }
+.custom-rules-settings .custom-rule-row input::placeholder { color: #b6bdc9; }
+.custom-rules-settings .custom-rule-row select:disabled { background: #f4f6f9; color: #b6bdc9; }
+.custom-rules-settings .custom-rule-row .invalid { border-color: #f0b7b2; background: #fff8f7; }
+.custom-rules-settings .custom-rule-cell { min-width: 0; }
+.custom-rules-settings .custom-rule-error { margin-top: 4px; font-size: 10px; color: #b42318; line-height: 1.4; }
+.custom-rules-settings .custom-rule-error:empty { display: none; }
+.custom-rules-settings .custom-rule-row .icon-button { height: 36px; font-size: 18px; }
+.custom-rules-settings .custom-rule-row .icon-button:hover { color: #b42318; }
+.custom-rules-settings .custom-position { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #e1e6ee; border-radius: 6px; overflow: hidden; height: 36px; }
+.custom-rules-settings .custom-position button { border: 0; background: #fcfdff; color: #72819a; font-size: 11px; cursor: pointer; }
+.custom-rules-settings .custom-position button + button { border-left: 1px solid #e1e6ee; }
+.custom-rules-settings .custom-position button.active { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+.custom-rules-settings .custom-mark-pick { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.custom-rules-settings .custom-mark-mini { width: 54px; height: 36px; flex: none; border: 1px solid #e1e6ee; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; color: #c4cad4; font-size: 11px; }
+.custom-rules-settings .custom-mark-mini img { max-width: 46px; max-height: 26px; }
+.custom-rules-settings .custom-rule-empty { padding: 34px 25px; text-align: center; color: #94a0b0; font-size: 12px; }
+.custom-rules-settings .custom-rule-add { padding: 14px 25px 18px; }
+
+.custom-rules-settings .custom-system-words { margin: 0; padding: 16px 25px 20px; display: grid; grid-template-columns: 90px 1fr; gap: 10px 12px; align-items: center; font-size: 12px; }
+.custom-rules-settings .custom-system-words dt { color: #94a0b0; }
+.custom-rules-settings .custom-system-words dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.custom-rules-settings .custom-system-words .tag-chip { padding: 3px 8px; }
+.custom-rules-settings .custom-system-words a { color: var(--blue); font-size: 11px; text-decoration: none; }
+
+.custom-rules-settings .custom-preview { padding: 18px 25px 22px; display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 24px; align-items: start; }
+.custom-rules-settings .custom-preview-input { display: grid; grid-template-columns: 90px 1fr; gap: 12px; align-items: center; margin-bottom: 14px; }
+.custom-rules-settings .custom-preview-input label { font-size: 12px; color: #52627a; }
+.custom-rules-settings .custom-preview-result { display: grid; grid-template-columns: 90px 1fr; gap: 12px; font-size: 12px; align-items: center; margin: 0; }
+.custom-rules-settings .custom-preview-result dt { color: #94a0b0; }
+.custom-rules-settings .custom-preview-result dd { margin: 0; overflow-wrap: anywhere; }
+.custom-rules-settings .custom-preview-result code { font-family: inherit; background: #f4f6f9; border-radius: 4px; padding: 3px 7px; }
+.custom-rules-settings .custom-seg-custom { color: var(--blue); font-weight: 600; }
+.custom-rules-settings .custom-seg-system { color: #5c9d83; }
+.custom-rules-settings .custom-preview-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.custom-rules-settings .custom-preview-tags .tag-chip { padding: 3px 8px; }
+.custom-rules-settings .custom-preview-tags .tag-chip.custom { background: var(--blue-soft); border-color: #cfdcf7; color: var(--blue); }
+.custom-rules-settings .custom-error-text { color: #b42318; }
+.custom-rules-settings .custom-legend { display: flex; gap: 14px; font-size: 11px; color: #94a0b0; margin-top: 14px; }
+.custom-rules-settings .custom-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.custom-rules-settings .custom-legend-custom { background: var(--blue); }
+.custom-rules-settings .custom-legend-system { background: #5c9d83; }
+.custom-rules-settings .custom-poster { position: relative; width: 210px; aspect-ratio: 2.12 / 3; border-radius: 6px; overflow: hidden; background: linear-gradient(160deg, #c9d3e3, #8e9bb2); }
+.custom-rules-settings .custom-poster::after { content: '海报示意'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #ffffffaa; font-size: 12px; letter-spacing: 2px; }
+.custom-rules-settings .custom-poster-mark { position: absolute; width: 64px; height: 26px; object-fit: contain; z-index: 1; }
+.custom-rules-settings .custom-poster-note { margin-top: 8px; font-size: 10px; color: #a3abba; line-height: 1.6; }
+.custom-rules-settings .custom-library.custom-disabled .custom-mark-grid { opacity: 0.45; }

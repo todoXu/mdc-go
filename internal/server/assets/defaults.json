@@ -69,6 +69,10 @@
     "watcher_enabled": false,
     "watcher_poll_interval_seconds": 30
   },
+  "custom": {
+    "rules": [],
+    "watermark_enabled": true
+  },
   "download": {
     "crop_aspect": "Full",
     "crop_poster": false,

@@ -177,7 +177,7 @@ func posterCropRectangle(ctx context.Context, src image.Image, width, height int
 func finalizeScrapeImage(ctx context.Context, input downloadedImage, kind string, flags filenameFlags, settings scrapeSettings) (downloadedImage, error) {
 	// Convert formats without an encoder before applying watermarks; keep original
 	// downloaded bytes when no transformation is requested.
-	if input.ext == ".gif" || (input.ext != ".jpg" && input.ext != ".png" && watermarkBool(settings.Watermark, "enabled") && watermarkBool(settings.Watermark, kind) && len(selectedWatermarks(flags, settings.Watermark)) > 0) {
+	if input.ext == ".gif" || (input.ext != ".jpg" && input.ext != ".png" && watermarkBool(settings.Watermark, kind) && len(selectedWatermarks(flags, settings.Watermark, settings.Custom.WatermarkEnabled)) > 0) {
 		src, err := decodeWatermarkImage(input.data)
 		if err != nil {
 			return downloadedImage{}, err
@@ -187,7 +187,7 @@ func finalizeScrapeImage(ctx context.Context, input downloadedImage, kind string
 			return downloadedImage{}, err
 		}
 	}
-	data, err := applyWatermarks(ctx, input.data, input.ext, kind, flags, settings.Watermark)
+	data, err := applyWatermarks(ctx, input.data, input.ext, kind, flags, settings.Watermark, customWatermarkOptions{Enabled: settings.Custom.WatermarkEnabled, Dir: settings.CustomWatermarkDir})
 	input.data = data
 	return input, err
 }

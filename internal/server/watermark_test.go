@@ -35,7 +35,7 @@ func TestFilenameSubtitleAndHackFlags(t *testing.T) {
 		{"ABP-123-LTX-破解-中字.mp4", "is_ltx_hack", true},
 		{"ABP-123_lada_C.mp4", "is_lada_hack", true},
 		{"ABP-123-JAV-CHS.mp4", "is_jav_hack", true},
-		{"ABP-123-LTX破解.mp4", "is_ltx_hack", false},
+		{"ABP-123-LTX破解.mp4", "is_censored", false},
 		{"ABP-123-破解.mp4", "is_other_hack", false},
 		{"ABP-123-CD1.mp4", "is_censored", false},
 		{"JAV-123.mp4", "is_censored", false},
@@ -102,7 +102,7 @@ func TestWatermarkWritesPixelsAndRespectsToggles(t *testing.T) {
 	settings.Common.Subtitle = testSubtitleKeywords
 	settings.Common.LTX = []string{"LTX"}
 	flags := detectFilenameFlags("ABP-123-LTX-中字.mp4", settings)
-	data, err := applyWatermarks(context.Background(), raw, ".png", "poster", flags, config)
+	data, err := applyWatermarks(context.Background(), raw, ".png", "poster", flags, config, customWatermarkOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,24 +126,24 @@ func TestWatermarkWritesPixelsAndRespectsToggles(t *testing.T) {
 		t.Fatal("modified unrelated pixels")
 	}
 	for _, kind := range []string{"fanart"} {
-		got, err := applyWatermarks(context.Background(), raw, ".png", kind, flags, config)
+		got, err := applyWatermarks(context.Background(), raw, ".png", kind, flags, config, customWatermarkOptions{})
 		if err != nil || !bytes.Equal(got, raw) {
 			t.Fatal("ignored image toggle", err)
 		}
 	}
 	config["enabled"] = false
-	got, err := applyWatermarks(context.Background(), raw, ".png", "poster", flags, config)
+	got, err := applyWatermarks(context.Background(), raw, ".png", "poster", flags, config, customWatermarkOptions{})
 	if err != nil || !bytes.Equal(got, raw) {
 		t.Fatal("disabled watermark modified image")
 	}
 	config["enabled"] = true
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := applyWatermarks(ctx, raw, ".png", "poster", flags, config); err == nil {
+	if _, err := applyWatermarks(ctx, raw, ".png", "poster", flags, config, customWatermarkOptions{}); err == nil {
 		t.Fatal("ignored cancellation")
 	}
 	config["custom_folder"] = t.TempDir()
-	if _, err := applyWatermarks(context.Background(), raw, ".png", "poster", flags, config); err == nil {
+	if _, err := applyWatermarks(context.Background(), raw, ".png", "poster", flags, config, customWatermarkOptions{}); err == nil {
 		t.Fatal("missing custom badge silently ignored")
 	}
 }

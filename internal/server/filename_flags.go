@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type probeStreams struct {
@@ -77,6 +78,8 @@ type filenameFlags struct {
 	Mosaic         string `json:"mosaic"`
 	MosaicMarker   string `json:"mosaic_marker,omitempty"`
 	Resolution     string `json:"resolution,omitempty"`
+	// Custom 是文件名命中的自定义规则（按规则列表顺序），用于后缀、NFO 标签和水印。
+	Custom []customRule `json:"custom,omitempty"`
 }
 
 type taskFlags struct {
@@ -92,9 +95,45 @@ type taskFlags struct {
 
 var resolutionToken = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(8k|4320p|4k|2160p)(?:$|[^a-z0-9])`)
 
+// keywordSeparators 是拆分文件名和关键词时使用的分隔符。
+const keywordSeparators = "-_. ()[]【】（）"
+
+// splitKeywordTokens 按分隔符和空白把文本拆成小写的词，中文不再拆分。
+func splitKeywordTokens(text string) []string {
+	return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return unicode.IsSpace(r) || strings.ContainsRune(keywordSeparators, r)
+	})
+}
+
+// wholeKeywordMatch 判断关键词是否完整出现在文件名中：关键词拆出的每个词，都必须是文件名词序列中
+// 连续的一段，且完全相同。例如 "中文" 只命中独立的「中文」，不会命中「中文字幕」；"-LTX-破解" 命中「LTX」「破解」连续出现。
+func wholeKeywordMatch(name, word string) bool {
+	return containsTokenSequence(splitKeywordTokens(name), splitKeywordTokens(word))
+}
+
+// containsTokenSequence 判断 want 是否是 have 中连续、完全相同的一段。
+func containsTokenSequence(have, want []string) bool {
+	if len(want) == 0 {
+		return false
+	}
+	for start := 0; start+len(want) <= len(have); start++ {
+		matched := true
+		for i, token := range want {
+			if have[start+i] != token {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
 func matchingKeyword(name string, words []string) string {
 	for _, word := range words {
-		if word != "" && strings.Contains(strings.ToLower(name), strings.ToLower(word)) {
+		if word != "" && wholeKeywordMatch(name, word) {
 			return word
 		}
 	}
@@ -105,25 +144,9 @@ func matchingKeyword(name string, words []string) string {
 // 必须是文件名中独立的一段，前后是分隔符或开头结尾，避免 C 匹配到任何含字母 c 的名字；
 // 其他关键词（如 中字）只要包含即可。都不区分大小写。
 func matchingSubtitleKeyword(name string, words []string) string {
-	lower := strings.ToLower(name)
-	tokens := strings.FieldsFunc(lower, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
-	})
 	for _, word := range words {
 		word = strings.TrimSpace(word)
-		if word == "" {
-			continue
-		}
-		target := strings.ToLower(word)
-		if strings.TrimFunc(target, func(r rune) bool { return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' }) == "" {
-			for _, token := range tokens {
-				if token == target {
-					return word
-				}
-			}
-			continue
-		}
-		if strings.Contains(lower, target) {
+		if word != "" && wholeKeywordMatch(name, word) {
 			return word
 		}
 	}
@@ -211,5 +234,7 @@ func detectFilenameFlagsWithProbe(path string, settings scrapeSettings, probe bo
 			flags.Resolution = override.Resolution
 		}
 	}
+	// 自定义规则只看文件名（去掉番号后的部分），不受手动标识覆盖影响。
+	flags.Custom = matchCustomRules(version, settings.Custom.Rules)
 	return flags
 }

@@ -11,26 +11,26 @@ const number = (config, key, title, desc, min = 0, max = 1000, step = 1) => fiel
 const check = (config, key, title, desc) => field(config, key, title, desc, `<input id="watermark-${key}" data-watermark="${key}" class="switch" type="checkbox" ${config[key] ? 'checked' : ''}>`);
 
 function render(config) {
-  return `${section('基本设置', '控制是否为下载的图片添加水印。')}
-    ${check(config, 'enabled', '启用水印', '根据视频信息，为下载的图片添加水印。')}
-    ${section('默认水印', '已内置一套 PNG 水印。')}
+  return `${section('基本设置', '控制是否为下载的图片添加系统水印。')}
+    ${check(config, 'enabled', '启用系统水印', '按文件名识别的字幕、破解类型、分辨率等添加水印。自定义规则的水印由「自定义规则」页的开关控制，不受此开关影响。')}
+    ${section('系统水印图片', '已内置一套 PNG 水印。')}
     <div class="watermark-default-gallery">${[['sub.png', '字幕'], ['ltx.png', 'LTX'], ['lada.png', 'LADA'], ['jav.png', 'JAV'], ['hack.png', '破解'], ['wuma.png', '无码'], ['youma.png', '有码'], ['4k.png', '4K'], ['8k.png', '8K']].map(([file, name]) => `<div><img src="/watermarks/${file}?v=rect2" alt="${name}水印"><span>${name}</span></div>`).join('')}</div>
-    <div class="field"><label class="field-label" for="watermark-custom-enabled">启用自定义水印<small>开启后，从本机选择水印图片目录。</small></label><input id="watermark-custom-enabled" class="switch" type="checkbox" ${config.custom_folder ? 'checked' : ''}></div>
-    ${field(config, 'custom_folder', '自定义水印目录', '图片需命名为 youma.png、wuma.png、ltx.png、lada.png、jav.png、hack.png、sub.png、4k.png、8k.png。', `<div class="folder-control"><input id="watermark-custom_folder" data-watermark="custom_folder" type="text" value="${h(config.custom_folder ?? '')}" placeholder="选择水印目录"><button id="watermark-choose-folder" class="button" type="button">选择目录</button></div>`, !config.custom_folder)}
-    ${section('布局与位置', '设置水印在图片上的排列方式。')}
+    <div class="field"><label class="field-label" for="watermark-custom-enabled">替换系统水印图片<small>开启后，从本机选择一个目录，用其中的同名图片替换内置的系统水印。</small></label><input id="watermark-custom-enabled" class="switch" type="checkbox" ${config.custom_folder ? 'checked' : ''}></div>
+    ${field(config, 'custom_folder', '系统水印图片目录', '图片需命名为 youma.png、wuma.png、ltx.png、lada.png、jav.png、hack.png、sub.png、4k.png、8k.png。', `<div class="folder-control"><input id="watermark-custom_folder" data-watermark="custom_folder" type="text" value="${h(config.custom_folder ?? '')}" placeholder="选择水印目录"><button id="watermark-choose-folder" class="button" type="button">选择目录</button></div>`, !config.custom_folder)}
+    ${section('布局与位置', '设置水印在图片上的排列方式；自定义规则的水印也按此排列。')}
     ${select(config, 'mode', '布局方式', '堆叠：横向排列；顺时针 / 逆时针：从固定位置沿对应方向排列。', [['Stack', '堆叠'], ['Clockwise', '顺时针'], ['CounterClockwise', '逆时针']])}
     ${select(config, 'start', '起始位置', '第一个水印的添加位置。', corners.slice(1))}
     ${number(config, 'scale', '缩放倍率', '图片与水印高度的比例。', 1, 100, 0.1)}
     ${number(config, 'offset_x', '横向偏移', '水印距离图片左右边缘的最小距离。')}
     ${number(config, 'offset_y', '纵向偏移', '水印距离图片上下边缘的最小距离。')}
     ${number(config, 'gap', '间距', '水印之间的距离。')}
-    ${section('添加水印的图片类型', '只会为选中的图片添加水印。')}
+    ${section('添加水印的图片类型', '只会为选中的图片添加水印，对系统水印和自定义规则的水印都生效。')}
     <div class="watermark-checks">${[['poster', '封面图 (poster)'], ['thumb', '缩略图 (thumb)'], ['fanart', '背景图 (fanart)']].map(([key, name]) => `<label><input type="checkbox" data-watermark="${key}" ${config[key] ? 'checked' : ''}>${name}</label>`).join('')}</div>
-    ${section('添加的水印类型', '按文件名中的字幕、LTX、LADA、JAV 等标记及整理页自定义关键词识别；只有“破解”时使用其他破解水印。')}
+    ${section('添加的水印类型', '按文件名中的字幕、LTX、LADA、JAV 等标记识别（关键词在整理页设置）；只有“破解”时使用其他破解水印。')}
     <div class="watermark-checks">${marks.map(([key, name]) => `<label><input type="checkbox" data-watermark="${key}" ${config[key] ? 'checked' : ''}>${name}</label>`).join('')}</div>
     ${section('固定位置', '先定位到指定角落，再按布局方向排列；自动则按起始位置沿四角依次定位。')}
     <div class="watermark-fixed">${marks.map(([key, name]) => `<label>${name}<select data-watermark="${key}_fixed">${options(corners, config[`${key}_fixed`])}</select></label>`).join('')}</div>
-    <div class="watermark-preview"><div><h3>默认水印预览</h3><p>展示位置和样式示意；实际刮削按文件名识别结果合成到所选图片。重新整理会从保留的原图重新生成，避免重复叠加。</p></div><div id="watermark-preview-image" class="watermark-preview-image"></div><label class="watermark-show-all"><input id="watermark-show-all" type="checkbox">显示全部已启用水印</label><button id="watermark-preview-refresh" class="button small" type="button">刷新预览</button></div>`;
+    <div class="watermark-preview"><div><h3>系统水印预览</h3><p>展示位置和样式示意；实际刮削按文件名识别结果合成到所选图片。重新整理会从保留的原图重新生成，避免重复叠加。</p></div><div id="watermark-preview-image" class="watermark-preview-image"></div><label class="watermark-show-all"><input id="watermark-show-all" type="checkbox">显示全部已启用水印</label><button id="watermark-preview-refresh" class="button small" type="button">刷新预览</button></div>`;
 }
 
 function read(form, original, validateFolder = false) {
@@ -44,7 +44,7 @@ function read(form, original, validateFolder = false) {
     result[key] = value;
   }
   if (!form.querySelector('#watermark-custom-enabled').checked) result.custom_folder = null;
-  else if (validateFolder && !result.custom_folder) throw Error('请先选择自定义水印目录');
+  else if (validateFolder && !result.custom_folder) throw Error('请先选择系统水印图片目录');
   return result;
 }
 
@@ -96,7 +96,7 @@ export function bindWatermarkFields(root, config, onChange) {
 export async function watermarkSettings({ heading, toast, markDirty, clearDirty, reload }) {
   const config = await api('/api/config/watermark');
   return {
-    html: heading('设置', '配置图片水印样式、类型和位置。') + `<div class="settings-layout watermark-settings"><nav class="settings-nav"><a href="#/settings/common">整理</a><a href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a class="active" href="#/settings/watermark">水印</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a href="#/settings/user">用户</a></nav><form id="watermark-form" class="panel">${render(config)}<div class="savebar"><span id="watermark-save-status">修改后请保存</span><div><button id="watermark-reset" class="button" type="button">撤销修改</button> <button id="watermark-save" class="button primary" type="submit">保存设置</button></div></div></form></div><dialog id="watermark-folder-dialog" class="folder-dialog"><div class="folder-dialog-head"><h2>选择水印目录</h2><button id="watermark-folder-close" class="icon-button" type="button" aria-label="关闭">×</button></div><div class="folder-location"><button id="watermark-folder-up" class="button small" type="button">↑ 上一级</button><input id="watermark-folder-path" type="text" aria-label="目录路径" placeholder="完整目录路径"><button id="watermark-folder-go" class="button small" type="button">转到</button></div><div id="watermark-folder-list" class="folder-list" role="list"></div><p id="watermark-folder-status" class="folder-status" role="status"></p><div class="folder-dialog-actions"><button id="watermark-folder-cancel" class="button" type="button">取消</button><button id="watermark-folder-select" class="button primary" type="button" disabled>选择此目录</button></div></dialog>`,
+    html: heading('设置', '配置系统水印的样式、类型和位置。') + `<div class="settings-layout watermark-settings"><nav class="settings-nav"><a href="#/settings/common">整理</a><a href="#/settings/watch-dir">监控</a><a href="#/settings/download">下载</a><a href="#/settings/naming">命名</a><a class="active" href="#/settings/watermark">系统水印</a><a href="#/settings/custom">自定义规则</a><a href="#/settings/metadata">元数据</a><a href="#/settings/nfo">NFO</a><a href="#/settings/emby">头像</a><a href="#/settings/system">系统</a><a href="#/settings/user">用户</a></nav><form id="watermark-form" class="panel">${render(config)}<div class="savebar"><span id="watermark-save-status">修改后请保存</span><div><button id="watermark-reset" class="button" type="button">撤销修改</button> <button id="watermark-save" class="button primary" type="submit">保存设置</button></div></div></form></div><dialog id="watermark-folder-dialog" class="folder-dialog"><div class="folder-dialog-head"><h2>选择水印目录</h2><button id="watermark-folder-close" class="icon-button" type="button" aria-label="关闭">×</button></div><div class="folder-location"><button id="watermark-folder-up" class="button small" type="button">↑ 上一级</button><input id="watermark-folder-path" type="text" aria-label="目录路径" placeholder="完整目录路径"><button id="watermark-folder-go" class="button small" type="button">转到</button></div><div id="watermark-folder-list" class="folder-list" role="list"></div><p id="watermark-folder-status" class="folder-status" role="status"></p><div class="folder-dialog-actions"><button id="watermark-folder-cancel" class="button" type="button">取消</button><button id="watermark-folder-select" class="button primary" type="button" disabled>选择此目录</button></div></dialog>`,
     bind() {
       const form = document.querySelector('#watermark-form');
       const $ = (selector) => document.querySelector(selector);
@@ -107,7 +107,7 @@ export async function watermarkSettings({ heading, toast, markDirty, clearDirty,
       form.oninput = form.onchange = (event) => { syncCustomFolder(); if (event.target.dataset.watermark || event.target.id === 'watermark-custom-enabled') { markDirty(); $('#watermark-save-status').textContent = '有尚未保存的修改'; } refresh(); };
       $('#watermark-preview-refresh').onclick = refresh;
       $('#watermark-reset').onclick = () => { clearDirty(); reload(); toast('已撤销未保存的修改'); };
-      form.onsubmit = async (event) => { event.preventDefault(); const button = $('#watermark-save'); button.disabled = true; try { await api('/api/config/watermark', { method: 'PUT', body: read(form, config, true) }); clearDirty(); $('#watermark-save-status').textContent = '水印设置已保存'; toast('水印设置已保存'); } catch (error) { toast(error.message, true); } finally { button.disabled = false; } };
+      form.onsubmit = async (event) => { event.preventDefault(); const button = $('#watermark-save'); button.disabled = true; try { await api('/api/config/watermark', { method: 'PUT', body: read(form, config, true) }); clearDirty(); $('#watermark-save-status').textContent = '系统水印设置已保存'; toast('系统水印设置已保存'); } catch (error) { toast(error.message, true); } finally { button.disabled = false; } };
       const dialog = $('#watermark-folder-dialog'); let folder = { path: '', parent: '' };
       const browse = async (path = '') => { $('#watermark-folder-status').textContent = '正在读取文件夹…'; $('#watermark-folder-list').innerHTML = ''; $('#watermark-folder-select').disabled = true; try { folder = await api('/api/system/folders?path=' + encodeURIComponent(path)); $('#watermark-folder-path').value = folder.path; $('#watermark-folder-up').disabled = !folder.path; $('#watermark-folder-select').disabled = !folder.path; $('#watermark-folder-list').innerHTML = folder.folders.length ? folder.folders.map(item => `<button type="button" class="folder-item" data-path="${h(item.path)}"><span aria-hidden="true">▰</span>${h(item.name)}</button>`).join('') : '<div class="folder-empty">没有子文件夹</div>'; $('#watermark-folder-list').querySelectorAll('[data-path]').forEach(button => button.onclick = () => browse(button.dataset.path)); $('#watermark-folder-status').textContent = folder.path || '请选择起始目录'; } catch (error) { $('#watermark-folder-status').textContent = error.message; } };
       $('#watermark-choose-folder').onclick = () => { dialog.showModal(); browse($('#watermark-custom_folder').value.trim()); };

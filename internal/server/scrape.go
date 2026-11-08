@@ -113,7 +113,14 @@ type scrapeSettings struct {
 	ProviderConfigs  map[string]provider.Config `json:"provider_configs,omitempty"`
 	Priorities       *provider.Priorities       `json:"priorities,omitempty"`
 	Watermark        map[string]any             `json:"watermark"`
-	Common           struct {
+	Custom           struct {
+		Rules []customRule `json:"rules"`
+		// WatermarkEnabled 控制是否添加自定义规则的水印，与系统水印设置里的「启用系统水印」互相独立。
+		WatermarkEnabled bool `json:"watermark_enabled"`
+	} `json:"custom"`
+	// CustomWatermarkDir 是自定义水印图片所在的目录，由 scrapeSettings 填写。
+	CustomWatermarkDir string `json:"custom_watermark_dir,omitempty"`
+	Common             struct {
 		LinkMode                       int      `json:"link_mode"`
 		TargetFolder                   string   `json:"target_folder"`
 		StrmPathFrom                   string   `json:"strm_path_from"`
@@ -386,13 +393,14 @@ func eligibleFile(path string, settings scrapeSettings) bool {
 func (s *Server) scrapeSettings() (scrapeSettings, error) {
 	s.mu.RLock()
 	parts := map[string]json.RawMessage{}
-	for _, name := range []string{"common", "naming", "download", "watermark", "nfo", "system", "metadata"} {
+	for _, name := range []string{"common", "naming", "download", "watermark", "nfo", "system", "metadata", "custom"} {
 		parts[name] = append([]byte(nil), s.configs[name]...)
 	}
 	s.mu.RUnlock()
 	var settings scrapeSettings
 	b, _ := json.Marshal(parts)
 	err := json.Unmarshal(b, &settings)
+	settings.CustomWatermarkDir = s.customWatermarkDir()
 	return settings, err
 }
 
@@ -706,9 +714,31 @@ func reservedWindowsName(stem string) bool {
 	return false
 }
 
+// namingSuffixParts 返回文件名后缀的三部分：放在系统后缀之前的自定义后缀、按命名设置生成的系统后缀、
+// 放在系统后缀之后的自定义后缀。同一位置的多个自定义后缀按规则列表顺序排列。
+func namingSuffixParts(flags filenameFlags, settings scrapeSettings) (before, system, after string) {
+	system = settings.Naming.Suffix
+	system = strings.ReplaceAll(system, "{mosaic}", stringSetting(settings.Naming.Suffixes, flags.Mosaic))
+	subtitle := ""
+	if flags.HasSubtitle {
+		subtitle = stringSetting(settings.Naming.Suffixes, "has_subtitle")
+	}
+	system = strings.ReplaceAll(system, "{subtitle}", subtitle)
+	system = strings.ReplaceAll(system, "{resolution}", resolutionNamingSuffix(flags.Resolution, settings))
+	var head, tail strings.Builder
+	for _, rule := range flags.Custom {
+		if rule.Position == "before" {
+			head.WriteString(rule.Suffix)
+		} else {
+			tail.WriteString(rule.Suffix)
+		}
+	}
+	return head.String(), system, tail.String()
+}
+
 func buildVideoStem(path string, meta provider.Metadata, settings scrapeSettings) (string, error) {
 	meta = mapMetadataActors(meta, settings)
-	mosaic := detectFilenameFlags(path, settings).Mosaic
+	flags := detectFilenameFlags(path, settings)
 	limit := settings.Naming.MaxActor
 	if limit <= 0 {
 		limit = 3
@@ -735,15 +765,8 @@ func buildVideoStem(path string, meta provider.Metadata, settings scrapeSettings
 	if body == "" {
 		return "", errors.New("视频命名规则生成了空文件名")
 	}
-	suffix := settings.Naming.Suffix
-	suffix = strings.ReplaceAll(suffix, "{mosaic}", stringSetting(settings.Naming.Suffixes, mosaic))
-	subtitle := ""
-	if detectFilenameFlags(path, settings).HasSubtitle {
-		subtitle = stringSetting(settings.Naming.Suffixes, "has_subtitle")
-	}
-	suffix = strings.ReplaceAll(suffix, "{subtitle}", subtitle)
-	suffix = strings.ReplaceAll(suffix, "{resolution}", resolutionNamingSuffix(detectFilenameFlags(path, settings).Resolution, settings))
-	stem := strings.TrimSpace(body + suffix)
+	before, suffix, after := namingSuffixParts(flags, settings)
+	stem := strings.TrimSpace(body + before + suffix + after)
 	if stem == "" || stem == "." || stem == ".." || badFilename.MatchString(stem) || strings.HasSuffix(stem, ".") || strings.HasSuffix(stem, " ") || reservedWindowsName(stem) {
 		return "", fmt.Errorf("命名结果含非法文件名字符：%q", stem)
 	}
@@ -1007,6 +1030,12 @@ func nfoTagsWithOrigin(meta provider.Metadata, flags filenameFlags, settings scr
 	}
 	if config.Publisher {
 		add("publisher", nfoExpand(config.PublisherFormat, values))
+	}
+	// 自定义规则的标签不受附加标签开关影响，命中即写入（仍需启用 NFO 的「标签」）。
+	for _, rule := range flags.Custom {
+		if rule.Tag != "" {
+			add(nfoTagCustom, rule.Tag)
+		}
 	}
 	// 与 nfoUnique 相同的去重规则：去掉首尾空白，忽略大小写，保留首次出现。
 	seen := map[string]bool{}
