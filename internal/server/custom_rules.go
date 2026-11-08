@@ -95,7 +95,7 @@ func systemKeywordGroups(common json.RawMessage) ([]keywordGroup, error) {
 		}
 		sets = append(sets, own)
 	}
-	groups := []keywordGroup{{Name: "字幕"}, {Name: "LTX 破解"}, {Name: "LADA 破解"}, {Name: "JAV 破解"}, {Name: "其他破解"}, {Name: "无码"}, {Name: "分辨率", Words: append([]string{}, resolutionKeywords...)}}
+	groups := []keywordGroup{{Name: "字幕", Words: []string{}}, {Name: "LTX 破解", Words: []string{}}, {Name: "LADA 破解", Words: []string{}}, {Name: "JAV 破解", Words: []string{}}, {Name: "其他破解", Words: []string{}}, {Name: "无码", Words: []string{}}, {Name: "分辨率", Words: append([]string{}, resolutionKeywords...)}}
 	seen := make([]map[string]bool, len(groups))
 	for i := range seen {
 		seen[i] = map[string]bool{}
