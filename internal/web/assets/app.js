@@ -53,9 +53,10 @@ const labels = {
   target_overwrite_pic: '覆盖已有图片',
   link_mode: '文件整理方式',
   delete_empty_parent_after_move: '移动后清理空目录',
-  file_size_filter: '文件大小下限（字节）',
+  file_size_filter: '文件大小过滤（MB）',
   file_ext_filter: '视频扩展名',
   file_name_blacklist: '文件名黑名单',
+  file_name_junk: '文件名垃圾信息过滤',
   subtitle_keywords: '中文字幕关键词',
   other_hack_keywords: '其他破解关键词',
   uncensored_keywords: '无码关键词',
@@ -209,7 +210,7 @@ const nfoLabels = {
 };
 const fieldHelp = {
   target_folder: '完整的目录路径',
-  file_size_filter: '小于此值的文件会被过滤，0 表示不限',
+  file_size_filter: '小于此大小（MB）的文件会被过滤，0 表示不限',
   max_actor_count: '0 表示不限',
   request_timeout: '单个请求最长等待时间，0 表示使用默认值 20 秒。',
   trailer_timeout: '预告片下载最长等待时间，0 表示使用默认值 60 秒。',
@@ -831,9 +832,10 @@ async function settings() {
         <div class="field mode-option" id="overwrite-video-option"><label class="field-label" for="overwrite-video">覆盖目标目录视频和字幕<small>开启后，整理时会覆盖目标目录中已存在的视频和字幕文件</small></label><input id="overwrite-video" type="checkbox" class="switch" ${value.target_overwrite_video ? 'checked' : ''}></div>
         <div class="field mode-option" id="overwrite-pic-option"><label class="field-label" for="overwrite-pic">覆盖目标目录图片<small>开启后，整理时会覆盖目标目录中已存在的图片</small></label><input id="overwrite-pic" type="checkbox" class="switch" ${value.target_overwrite_pic ? 'checked' : ''}></div>
         <div class="download-section-title"><h2>文件筛选</h2></div>
-        <div class="field"><label class="field-label" for="min-file-size">文件大小过滤（MB）<small>小于此大小的视频文件将被忽略；0 表示不过滤。将影响后续目录监控和文件搜索。</small></label><input id="min-file-size" type="number" min="0" step="any" value="${h(Number(value.file_size_filter || 0) / 1048576)}"></div>
+        <div class="field"><label class="field-label" for="min-file-size">文件大小过滤（MB）<small>小于此大小的视频文件将被忽略；0 表示不过滤。将影响后续目录监控和文件搜索。</small></label><input id="min-file-size" type="number" min="0" step="any" value="${h(Number(value.file_size_filter || 0))}"></div>
         <div class="field"><label class="field-label" for="video-extensions-input">文件类型白名单<small>仅识别这些扩展名的视频文件；点添加后输入，不带点号。</small></label>${tagEditor('video-extensions', 'file_ext_filter', '视频扩展名')}</div>
         <div class="field"><label class="field-label" for="filename-blacklist-input">文件名黑名单<small>文件名包含任一条目时忽略该文件。</small></label>${tagEditor('filename-blacklist', 'file_name_blacklist', '文件名黑名单')}</div>
+        <div class="field"><label class="field-label" for="filename-junk-input">文件名垃圾信息过滤<small>识别番号和标记前，先删掉文件名中的这些内容；原文件名不改动。以 r: 开头的条目是正则。</small></label>${tagEditor('filename-junk', 'file_name_junk', '垃圾信息')}</div>
         <div class="download-section-title"><h2>中文字幕识别</h2><p>文件名包含任一关键词即视为有中文字幕。</p></div>
         <div class="field"><label class="field-label" for="subtitle-keywords-input">中文字幕关键词<small>不区分大小写。纯英文字母或数字的关键词（如 C、CHS）须在文件名中单独成段，例如 ABP-123-C。</small></label>${tagEditor('subtitle-keywords', 'subtitle_keywords', '中文字幕关键词')}</div>
         <div class="download-section-title"><h2>影片类型识别</h2><p>按 LTX、LADA、JAV、其他破解、无码的顺序识别，命中一项即停止；都没命中时为有码。</p></div>
@@ -1008,8 +1010,7 @@ async function settings() {
           if (folder && !isAbsolutePath(folder))
             throw Error(absolutePathHint('整理目录'));
           const sizeMB = Number($('#min-file-size').value);
-          const sizeBytes = Math.round(sizeMB * 1048576);
-          if (!Number.isFinite(sizeMB) || sizeMB < 0 || !Number.isSafeInteger(sizeBytes))
+          if (!Number.isFinite(sizeMB) || sizeMB < 0)
             throw Error('文件大小过滤须为有效的非负数');
           for (const editor of tagEditors) {
             if (!editor.querySelector('.tag-entry').hidden) addPendingTag(editor);
@@ -1025,9 +1026,10 @@ async function settings() {
               target_overwrite_pic: $('#overwrite-pic').checked,
               strm_path_from: $('#strm-path-from').value.trim(),
               strm_path_to: $('#strm-path-to').value.trim(),
-              file_size_filter: sizeBytes,
+              file_size_filter: sizeMB,
               file_ext_filter: readTags('video-extensions'),
               file_name_blacklist: readTags('filename-blacklist'),
+              file_name_junk: readTags('filename-junk'),
               subtitle_keywords: readTags('subtitle-keywords'),
               jav_hack_keywords: readTags('jav-keywords'),
               lada_hack_keywords: readTags('lada-keywords'),

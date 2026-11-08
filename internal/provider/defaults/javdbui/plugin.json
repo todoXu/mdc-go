@@ -2,7 +2,7 @@
   "api_version": 2,
   "id": "javdbui",
   "name": "javdbui",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "engine": "javascript-v1",
   "base_url": "https://catembylegacy.fastcdn.dpdns.org",
   "input_hint": ""

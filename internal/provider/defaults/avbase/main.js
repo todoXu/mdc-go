@@ -30,6 +30,8 @@ function list(page, selector, attribute) {
   return output;
 }
 function workNumber(id) { return host.normalize(id.split(":").pop()); }
+// bareKey 去掉连字符和前导数字后大写，用于比较番号：406FTHT-146 与 FTHT-146 视为同一作品。
+function bareKey(value) { return value.replace(/-/g, "").replace(/^\d+(?=[A-Za-z])/, "").toUpperCase(); }
 function publishNumberFromCover(address) {
   var match = address.match(/\/(?:pics_dig\/)?(?:digital\/video|(?:dig\/)?mono\/movie(?:\/adult)?)\/([^/]+)\//i);
   return match ? match[1].toLowerCase() : "";
@@ -48,6 +50,16 @@ function posterFromCover(address) {
   }
   return "https://awsimgsrc.dmm.com/" + path + "ps.jpg";
 }
+// searchWorks 用 query 搜索站内作品，返回链接中的番号与 number 完全相同的作品路径。
+function searchWorks(query, number) {
+  var search = host.request(base() + "/works?q=" + encodeURIComponent(query), {}); check(search);
+  var matches = nodes(search, "a[href^='/works/']"), paths = [];
+  for (var i=0; i<matches.length; i++) {
+    var path = matches[i].attrs.href || "", id = path.split("/").pop();
+    if (workNumber(id) === number && paths.indexOf(path) < 0) paths.push(path);
+  }
+  return paths;
+}
 function locate(input) {
   input = input.trim();
   var qualified = input;
@@ -60,12 +72,10 @@ function locate(input) {
     return {number: workNumber(qualified), path: "/works/" + encodeURIComponent(qualified)};
   var number = host.normalize(input);
   if (!number) fail("invalid_number", "请输入有效番号或站内作品链接");
-  var search = host.request(base() + "/works?q=" + encodeURIComponent(number), {}); check(search);
-  var matches = nodes(search, "a[href^='/works/']"), paths = [];
-  for (var i=0; i<matches.length; i++) {
-    var path = matches[i].attrs.href || "", id = path.split("/").pop();
-    if (workNumber(id) === number && paths.indexOf(path) < 0) paths.push(path);
-  }
+  var paths = searchWorks(number, number);
+  // 站点的作品链接可能不带前导数字（406FTHT-146 的链接是 faleno:FTHT-146），去掉后再搜一次。
+  var bare = number.replace(/^\d+(?=[A-Z])/, "");
+  if (!paths.length && bare !== number) paths = searchWorks(bare, bare);
   if (!paths.length) fail("not_found", "搜索结果中没有找到完全匹配的番号");
   if (paths.length > 1) fail("ambiguous_number", "存在多个同番号作品，请直接输入作品链接或厂商:番号");
   return {number: number, path: paths[0]};
@@ -85,7 +95,7 @@ var plugin = {
     var matched = canonical && (canonical.attrs.href || "").match(/([A-Z0-9]+-[0-9]+)$/i);
     var number = matched ? host.normalize(matched[1]) : "";
     if (!number || !title) fail("parse_error", "页面缺少番号或标题；可能是验证页或站点结构变化");
-    if (number !== work.number) fail("number_mismatch", "返回页面的番号与查询不一致");
+    if (bareKey(number) !== bareKey(work.number)) fail("number_mismatch", "返回页面的番号与查询不一致");
     var coverURL = cover ? host.resolve(page.url, cover.attrs.src || "") : "";
     return {
       provider: manifest.ID, source_url: page.url, number: number,

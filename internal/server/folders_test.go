@@ -80,7 +80,7 @@ func TestOrganizeSettingsPreserveOtherFields(t *testing.T) {
 	}
 	// 用当前系统的完整路径：Windows 为 C:\…，Linux 为 /…。
 	target, _ := json.Marshal(filepath.Join(t.TempDir(), "Media"))
-	body := `{"target_folder":` + string(target) + `,"link_mode":2,"delete_metadata_folder_when_failed":true,"delete_empty_parent_after_move":true,"file_size_filter":104857600,"file_ext_filter":["mp4","mkv"],"file_name_blacklist":["sample"],"jav_hack_keywords":["JAV"],"lada_hack_keywords":["LADA"],"ltx_hack_keywords":["LTX"]}`
+	body := `{"target_folder":` + string(target) + `,"link_mode":2,"delete_metadata_folder_when_failed":true,"delete_empty_parent_after_move":true,"file_size_filter":100,"file_ext_filter":["mp4","mkv"],"file_name_blacklist":["sample"],"jav_hack_keywords":["JAV"],"lada_hack_keywords":["LADA"],"ltx_hack_keywords":["LTX"]}`
 	if w := call(s, "PUT", "/api/config/common", body); w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}
@@ -92,7 +92,7 @@ func TestOrganizeSettingsPreserveOtherFields(t *testing.T) {
 	if err := json.Unmarshal(call(s, "GET", "/api/config/common", "").Body.Bytes(), &saved); err != nil {
 		t.Fatal(err)
 	}
-	if saved["target_folder_metadata"] != nil || saved["delete_metadata_folder_when_failed"] != true || saved["other_hack_keywords"] == nil || saved["delete_empty_parent_after_move"] != true || saved["file_size_filter"] != float64(104857600) {
+	if saved["target_folder_metadata"] != nil || saved["delete_metadata_folder_when_failed"] != true || saved["other_hack_keywords"] == nil || saved["delete_empty_parent_after_move"] != true || saved["file_size_filter"] != float64(100) {
 		t.Fatal(saved)
 	}
 	for key, want := range map[string]string{"file_ext_filter": "mp4", "file_name_blacklist": "sample", "jav_hack_keywords": "JAV", "lada_hack_keywords": "LADA", "ltx_hack_keywords": "LTX"} {

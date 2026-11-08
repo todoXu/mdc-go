@@ -29,6 +29,20 @@ type MergeHooks struct {
 	Collected func()
 }
 
+// bareNumberKey 用于比较数据源返回的番号：去掉连字符和字母前的前导数字，大小写不敏感。
+// 406FTHT-146 与 FTHT-146 视为同一作品（站点常省略前导数字）。
+func bareNumberKey(number string) string {
+	key := strings.ToUpper(strings.ReplaceAll(number, "-", ""))
+	i := 0
+	for i < len(key) && key[i] >= '0' && key[i] <= '9' {
+		i++
+	}
+	if i > 0 && i < len(key) && key[i] >= 'A' && key[i] <= 'Z' {
+		key = key[i:]
+	}
+	return key
+}
+
 // Merge only uses each field's explicit order. No implicit fallback is used.
 func Merge(ctx context.Context, number string, priorities Priorities, fetch func(context.Context, string) (Metadata, error)) (MergeResult, error) {
 	return MergeWithHooks(ctx, number, priorities, fetch, MergeHooks{})
@@ -76,7 +90,7 @@ func MergeWithHooks(ctx context.Context, number string, priorities Priorities, f
 			switch {
 			case err != nil:
 				outcome.warning = err.Error()
-			case strings.ReplaceAll(strings.ToUpper(metadata.Number), "-", "") != strings.ReplaceAll(number, "-", ""):
+			case bareNumberKey(metadata.Number) != bareNumberKey(number):
 				outcome.warning = "返回番号不一致"
 			default:
 				b, _ := json.Marshal(metadata)

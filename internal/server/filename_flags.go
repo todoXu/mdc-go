@@ -169,13 +169,15 @@ func detectFilenameFlagsNoProbe(path string, settings scrapeSettings) filenameFl
 }
 
 func detectFilenameFlagsWithProbe(path string, settings scrapeSettings, probe bool) filenameFlags {
-	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	cleanPath := pathWithoutJunk(path, settings.Common.Junk)
+	name := strings.TrimSuffix(filepath.Base(cleanPath), filepath.Ext(cleanPath))
 	flags := filenameFlags{Mosaic: "is_censored"}
 	flags.SubtitleMarker = matchingSubtitleKeyword(name, settings.Common.Subtitle)
 	flags.HasSubtitle = flags.SubtitleMarker != ""
 	version := name
-	if number := detectNumber(path); number != "" {
-		pattern := regexp.MustCompile(`(?i)` + strings.ReplaceAll(regexp.QuoteMeta(number), "-", `[-_ ]?`))
+	if number := detectNumber(cleanPath); number != "" {
+		// 数字前允许 0 补位：JUR-890 也能删掉原文中的 jur00890。
+		pattern := regexp.MustCompile(`(?i)` + strings.ReplaceAll(regexp.QuoteMeta(number), "-", `[-_ ]?0*`))
 		version = pattern.ReplaceAllString(version, " ")
 	}
 	for _, rule := range []struct {

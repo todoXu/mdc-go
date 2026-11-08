@@ -34,7 +34,23 @@
       "m2ts"
     ],
     "file_name_blacklist": [],
-    "file_size_filter": 0,
+    "file_name_junk": [
+      "2048论坛@fun2048.com",
+      "1080p",
+      "720p",
+      "22-sht.me",
+      "-HD",
+      "bbs2048.org@",
+      "hhd800.com@",
+      "icao.me@",
+      "hhb_000",
+      "[456k.me]",
+      "[ThZu.Cc]",
+      "_U3C3",
+      "-hhb",
+      "hhb"
+    ],
+    "file_size_filter": 100,
     "jav_hack_keywords": [
       "-JAV-破解"
     ],

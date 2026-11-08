@@ -2,7 +2,7 @@
   "api_version": 2,
   "id": "javdb",
   "name": "javdb",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "engine": "javascript-v1",
   "base_url": "https://javdb.com",
   "input_hint": "需先在数据源配置中填写 Cookies"

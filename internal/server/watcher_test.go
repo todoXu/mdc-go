@@ -66,8 +66,8 @@ func TestWatcherScansEachDirectoryWithItsOwnWhitelist(t *testing.T) {
 	holdWatcherJobs(t, s)
 	config := watchConfig{Enabled: true, IntervalSeconds: 30}
 	config.Directories = []watchDirectory{
-		{ID: "first", Path: first, Enabled: true, Common: json.RawMessage(`{"link_mode":3,"file_ext_filter":["mp4"]}`)},
-		{ID: "second", Path: second, Enabled: true, Common: json.RawMessage(`{"link_mode":3,"file_ext_filter":["mkv"]}`)},
+		{ID: "first", Path: first, Enabled: true, Common: json.RawMessage(`{"link_mode":3,"file_size_filter":0,"file_ext_filter":["mp4"]}`)},
+		{ID: "second", Path: second, Enabled: true, Common: json.RawMessage(`{"link_mode":3,"file_size_filter":0,"file_ext_filter":["mkv"]}`)},
 	}
 	s.scanWatchDirectories(context.Background(), config)
 	if len(s.watchState.Directories) != 2 || s.watchState.Directories[0].Matched != 1 || s.watchState.Directories[1].Matched != 1 || s.watchState.Directories[0].NewFiles != 1 || s.watchState.Directories[1].NewFiles != 1 {

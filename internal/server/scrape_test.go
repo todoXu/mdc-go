@@ -95,11 +95,11 @@ func TestEligibleFile(t *testing.T) {
 	var settings scrapeSettings
 	settings.Common.Extensions = []string{"mp4"}
 	settings.Common.Blacklist = []string{"sample"}
-	settings.Common.MinSize = 5
+	settings.Common.MinSizeMB = 5.0 / 1048576
 	if !eligibleFile(video, settings) || eligibleFile(blocked, settings) {
 		t.Fatal("file filters did not apply")
 	}
-	settings.Common.MinSize = 6
+	settings.Common.MinSizeMB = 6.0 / 1048576
 	if eligibleFile(video, settings) {
 		t.Fatal("minimum size was ignored")
 	}

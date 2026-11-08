@@ -34,6 +34,20 @@ function resultNumber(item) {
   var node = host.select(item.html, ".video-title strong");
   return node.length ? host.normalize(node[0].text) : "";
 }
+// bareKey 去掉连字符和前导数字后大写，用于比较番号：406FTHT-146 与 FTHT-146 视为同一作品。
+function bareKey(value) { return value.replace(/-/g, "").replace(/^\d+(?=[A-Za-z])/, "").toUpperCase(); }
+// searchJavdb 用 query 搜索，返回列表中番号与 number 完全相同的作品路径。
+function searchJavdb(query, number) {
+  var search = host.request(base() + "/search?q=" + encodeURIComponent(query) + "&f=all", {}); check(search);
+  var items = nodes(search, ".movie-list .item"), paths = [];
+  for (var i=0; i<items.length; i++) {
+    var link = host.select(items[i].html, "a[href^='/v/']");
+    if (!link.length) continue;
+    var path = link[0].attrs.href;
+    if (resultNumber(items[i]) === number && paths.indexOf(path) < 0) paths.push(path);
+  }
+  return paths;
+}
 function locate(input) {
   input = input.trim();
   if (/^https?:\/\//i.test(input)) {
@@ -43,14 +57,10 @@ function locate(input) {
   }
   var number = host.normalize(input);
   if (!number) fail("invalid_number", "请输入有效番号或作品详情链接");
-  var search = host.request(base() + "/search?q=" + encodeURIComponent(number) + "&f=all", {}); check(search);
-  var items = nodes(search, ".movie-list .item"), paths = [];
-  for (var i=0; i<items.length; i++) {
-    var link = host.select(items[i].html, "a[href^='/v/']");
-    if (!link.length) continue;
-    var path = link[0].attrs.href;
-    if (resultNumber(items[i]) === number && paths.indexOf(path) < 0) paths.push(path);
-  }
+  var paths = searchJavdb(number, number);
+  // 站点列表的番号可能不带前导数字（406FTHT-146 收录为 FTHT-146），去掉后再搜一次。
+  var bare = number.replace(/^\d+(?=[A-Z])/, "");
+  if (!paths.length && bare !== number) paths = searchJavdb(bare, bare);
   if (!paths.length) fail("not_found", "搜索结果中没有找到完全匹配的番号");
   if (paths.length > 1) fail("ambiguous_number", "存在多个同番号作品，请直接输入作品详情链接");
   return {number: number, path: paths[0]};
@@ -77,7 +87,7 @@ var plugin = {
     var trailerNode = first(page, "video source[src], video[src], meta[property='og:video:url'][content], meta[property='og:video'][content]");
     var number = numberNode ? host.normalize(numberNode.text) : "";
     if (!number || !titleNode) fail("parse_error", "页面缺少番号或标题；可能是验证页或站点结构变化");
-    if (work.number && number.replace(/-/g, "") !== work.number.replace(/-/g, "")) fail("number_mismatch", "返回页面的番号与查询不一致");
+    if (work.number && bareKey(number) !== bareKey(work.number)) fail("number_mismatch", "返回页面的番号与查询不一致");
     var cover = coverNode ? host.resolve(page.url, coverNode.attrs.src || "") : "";
     return {
       provider: manifest.ID, source_url: page.url, number: number,

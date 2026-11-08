@@ -45,7 +45,11 @@ var plugin = {
     }
     var number = host.normalize(input);
     if (!number) fail("invalid_number", "请输入有效番号，不要填写网址或文件路径");
-    var page = request(base() + "/" + encodeURIComponent(number), {}); check(page);
+    var page = request(base() + "/" + encodeURIComponent(number), {});
+    // 站点的页面地址不带前导数字（406FTHT-146 是 /FTHT-146），找不到时去掉后再请求一次。
+    var bare = number.replace(/^\d+(?=[A-Z])/, "");
+    if (page.status === 404 && bare !== number) { number = bare; page = request(base() + "/" + encodeURIComponent(number), {}); }
+    check(page);
     var titleNode = first(page, "h3"), coverNode = first(page, ".bigImage img");
     var trailerNode = first(page, "video source[src], video[src], meta[property='og:video:url'][content], meta[property='og:video'][content]");
     var found = host.normalize(value(page, ["識別碼", "识别码", "ID"]));

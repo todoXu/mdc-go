@@ -131,8 +131,9 @@ type scrapeSettings struct {
 		TargetOverwriteVideo           bool     `json:"target_overwrite_video"`
 		TargetOverwritePic             bool     `json:"target_overwrite_pic"`
 		Extensions                     []string `json:"file_ext_filter"`
-		MinSize                        int64    `json:"file_size_filter"`
+		MinSizeMB                      float64  `json:"file_size_filter"`
 		Blacklist                      []string `json:"file_name_blacklist"`
+		Junk                           []string `json:"file_name_junk"`
 		JAV                            []string `json:"jav_hack_keywords"`
 		LADA                           []string `json:"lada_hack_keywords"`
 		LTX                            []string `json:"ltx_hack_keywords"`
@@ -353,7 +354,7 @@ func (s *Server) enqueueScrapeJobs(paths []string, directoryID string, settings 
 		jobSettings := settings
 		s.jobs = append(s.jobs, scrapeJob{
 			ID: id, Sequence: s.jobSequence, Path: path, Directory: filepath.Dir(path),
-			Number: detectNumber(path), Actors: []string{}, HasSubtitle: detectSubtitle(path), FileInfo: detectFilenameFlags(path, settings), LinkMode: settings.Common.LinkMode,
+			Number: detectNumber(pathWithoutJunk(path, settings.Common.Junk)), Actors: []string{}, HasSubtitle: detectSubtitle(path), FileInfo: detectFilenameFlags(path, settings), LinkMode: settings.Common.LinkMode,
 			Source: "watcher", DirectoryID: directoryID, CreatedAt: time.Now().Format(time.RFC3339Nano), Settings: &jobSettings,
 		})
 		ids = append(ids, id)
@@ -388,7 +389,7 @@ func eligibleFile(path string, settings scrapeSettings) bool {
 		}
 	}
 	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular() && info.Size() >= settings.Common.MinSize
+	return err == nil && info.Mode().IsRegular() && info.Size() >= minFileSizeBytes(settings.Common.MinSizeMB)
 }
 
 func (s *Server) scrapeSettings() (scrapeSettings, error) {
@@ -650,11 +651,23 @@ func detectNumber(path string) string {
 	if match := filenameFC2Number.FindStringSubmatch(name); len(match) == 2 {
 		return "FC2-PPV-" + match[1]
 	}
-	match := filenameNumber.FindStringSubmatch(name)
-	if len(match) != 3 {
-		return ""
+	if number := numberFromName(name); number != "" {
+		return number
 	}
-	return match[1] + "-" + match[2]
+	if match := filenameNumber.FindStringSubmatch(name); len(match) == 3 {
+		return match[1] + "-" + match[2]
+	}
+	// 文件名里没有番号时，依次用父目录名识别，只使用具体规则。
+	for dir := filepath.Dir(path); ; {
+		if number := numberFromName(filepath.Base(dir)); number != "" {
+			return number
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 func containsKeyword(name string, words []string) bool {
@@ -1288,7 +1301,7 @@ func (s *Server) scrapeInPlace(ctx context.Context, path, override string, setti
 	}
 	number := override
 	if number == "" {
-		number = detectNumber(path)
+		number = detectNumber(pathWithoutJunk(path, settings.Common.Junk))
 	}
 	if number == "" {
 		return "", nil, errors.New("无法从文件名识别番号，请单独提交并填写番号")

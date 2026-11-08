@@ -134,7 +134,14 @@ function locate(input) {
 }
 
 function findMovie(number) {
-  var data = getJSON("/v2/search", {q: number, type: "movie", page: 1, limit: 30});
+  var found = searchMovie(number, number);
+  // 站点的番号可能不带前导数字（406FTHT-146 收录为 FTHT-146），去掉后再搜一次。
+  var bare = number.replace(/^\d+(?=[A-Z])/, "");
+  if (!found && bare !== number) found = searchMovie(bare, bare);
+  return found;
+}
+function searchMovie(query, number) {
+  var data = getJSON("/v2/search", {q: query, type: "movie", page: 1, limit: 30});
   var movies = data.movies || [];
   for (var i = 0; i < movies.length; i++) {
     if (movies[i].number && sameNumber(movies[i].number, number)) return movies[i];
