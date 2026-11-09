@@ -349,11 +349,11 @@ func (s *Server) enqueueScrapeJobs(paths []string, directoryID string, settings 
 			slog.Debug("[scrape] 跳过重复的文件", "path", path)
 			continue
 		}
-		s.jobSequence++
-		id := fmt.Sprintf("%d-%d", time.Now().UnixNano(), s.jobSequence)
+		sequence := s.nextJobSequence(directoryID)
+		id := fmt.Sprintf("%d-%d", time.Now().UnixNano(), sequence)
 		jobSettings := settings
 		s.jobs = append(s.jobs, scrapeJob{
-			ID: id, Sequence: s.jobSequence, Path: path, Directory: filepath.Dir(path),
+			ID: id, Sequence: sequence, Path: path, Directory: filepath.Dir(path),
 			Number: detectNumber(pathWithoutJunk(path, settings.Common.Junk)), Actors: []string{}, HasSubtitle: detectSubtitle(path), FileInfo: detectFilenameFlags(path, settings), LinkMode: settings.Common.LinkMode,
 			Source: "watcher", DirectoryID: directoryID, CreatedAt: time.Now().Format(time.RFC3339Nano), Settings: &jobSettings,
 		})

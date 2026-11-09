@@ -22,7 +22,7 @@ func TestScrapeHistoryKeepsRecordAndRefreshesFilenameFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(restored.jobs) != 2 || restored.jobSequence != 8 {
+	if len(restored.jobs) != 2 || restored.jobSequences[""] != 8 {
 		t.Fatal("lost records")
 	}
 	job := restored.jobs[0]

@@ -32,7 +32,7 @@ func TestSuccessfulRecordRetryRefetchesFromOutput(t *testing.T) {
 	// Reorganized records must also refetch rather than inherit Reorganize=true.
 	created := "2026-11-04T10:00:00+08:00"
 	s.jobs = []scrapeJob{{ID: "success", Sequence: 7, CreatedAt: created, Status: 2, Path: original, Output: output, Number: "ABP-123", Settings: &settings, Reorganize: true, DirectoryID: "library", Logs: []scrapeEvent{{Message: "old attempt"}}}}
-	s.jobSequence = 7
+	s.jobSequences = map[string]int{"library": 7}
 	s.scrapeSlots.acquire(1)
 	response := call(s, "POST", "/api/scrape/jobs/success/retry", "")
 	if response.Code != 202 {
@@ -41,7 +41,7 @@ func TestSuccessfulRecordRetryRefetchesFromOutput(t *testing.T) {
 	}
 	s.jobsMu.RLock()
 	next := s.jobs[len(s.jobs)-1]
-	count, sequence := len(s.jobs), s.jobSequence
+	count, sequence := len(s.jobs), s.jobSequences["library"]
 	s.jobsMu.RUnlock()
 	var result struct {
 		ID string `json:"id"`

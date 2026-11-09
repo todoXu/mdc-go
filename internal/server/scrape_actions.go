@@ -55,10 +55,8 @@ func (s *Server) deleteScrapeJob(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		s.jobs = append(s.jobs[:i], s.jobs[i+1:]...)
-		// 记录全部删除后，序号从 1 重新开始；任务 ID 带时间戳，不会重复。
-		if len(s.jobs) == 0 {
-			s.jobSequence = 0
-		}
+		// 该监控目录的记录全部删除后，它的序号从 1 重新开始；任务 ID 带时间戳，不会重复。
+		s.resetJobSequenceIfEmpty(job.DirectoryID)
 		s.publishJobChanged(job.ID, true)
 		writeJSON(w, 200, object{"success": true, "deleted_media": request.DeleteMedia, "directory": deletedDirectory})
 		return
@@ -474,6 +472,88 @@ func (s *Server) batchRetryScrapeJobs(w http.ResponseWriter, r *http.Request) {
 		s.startScrapeJobs(queued)
 	}
 	writeJSON(w, 200, object{"success": len(queued), "ids": queued, "failed": failures})
+}
+
+// batchStopLimit 是一次批量停止最多接受的记录数。停止只改内存状态，不涉及文件操作，所以上限比重试大。
+const batchStopLimit = 10000
+
+// batchStopScrapeJobs 提供 POST /api/scrape/batch/stop，一次停止多条记录，只处理请求里列出的记录。
+// 整个批次在一次加锁内完成：先把等待中的标为已终止，再取消处理中的。
+// 这样停掉处理中的任务后空出的线程，不会让同一批里等待中的任务先跑起来。
+// 已结束、正在编辑或不存在的记录逐条返回失败原因，不影响其它记录。
+func (s *Server) batchStopScrapeJobs(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		IDs []string `json:"ids"`
+	}
+	if !decode(w, r, &request) {
+		return
+	}
+	if len(request.IDs) == 0 {
+		fail(w, 400, "invalid_ids", "请选择要停止的记录")
+		return
+	}
+	if len(request.IDs) > batchStopLimit {
+		fail(w, 400, "too_many_ids", fmt.Sprintf("一次最多停止 %d 条记录", batchStopLimit))
+		return
+	}
+	type batchFailure struct {
+		ID      string `json:"id"`
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	}
+	wanted := map[string]bool{}
+	for _, id := range request.IDs {
+		wanted[id] = true
+	}
+	stopped := []string{}
+	failures := []batchFailure{}
+	found := map[string]bool{}
+	now := time.Now().Format(time.RFC3339Nano)
+	s.jobsMu.Lock()
+	// 第一遍：等待中的直接标为已终止，之后排到它们时 runScrapeJob 会跳过。
+	for i := range s.jobs {
+		job := &s.jobs[i]
+		if !wanted[job.ID] {
+			continue
+		}
+		found[job.ID] = true
+		switch {
+		case job.Editing:
+			failures = append(failures, batchFailure{ID: job.ID, Code: "job_active", Message: "记录正在更新，请稍后重试"})
+		case job.Status == 0:
+			job.StopRequested = true
+			job.Status = -2
+			job.Error = "已终止"
+			job.CompletedAt = now
+			stopped = append(stopped, job.ID)
+			s.publishJobChanged(job.ID, true)
+		case job.Status != 1:
+			failures = append(failures, batchFailure{ID: job.ID, Code: "job_finished", Message: "记录已结束"})
+		}
+	}
+	// 第二遍：取消处理中的任务，由工作协程自行结束并写入已终止状态。
+	for i := range s.jobs {
+		job := &s.jobs[i]
+		if !wanted[job.ID] || job.Editing || job.Status != 1 {
+			continue
+		}
+		job.StopRequested = true
+		if job.Cancel != nil {
+			job.Cancel()
+		}
+		stopped = append(stopped, job.ID)
+		s.publishJobChanged(job.ID, true)
+	}
+	s.jobsMu.Unlock()
+	for id := range wanted {
+		if !found[id] {
+			failures = append(failures, batchFailure{ID: id, Code: "not_found", Message: "记录不存在"})
+		}
+	}
+	if len(stopped) > 0 {
+		s.saveScrapeHistory()
+	}
+	writeJSON(w, 200, object{"success": len(stopped), "ids": stopped, "failed": failures})
 }
 
 // Keep saved metadata, but prepare fresh images before committing any changes.

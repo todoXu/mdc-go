@@ -101,8 +101,9 @@ func (s *Server) deleteWatchDirectoryJobs(removed map[string]bool) {
 		s.publishJobChanged(job.ID, true)
 	}
 	s.jobs = kept
-	if len(kept) == 0 {
-		s.jobSequence = 0
+	// 被删除的监控目录不再有记录，它的序号计数一并清除。
+	for id := range removed {
+		delete(s.jobSequences, id)
 	}
 	s.jobsMu.Unlock()
 	s.saveScrapeHistory()

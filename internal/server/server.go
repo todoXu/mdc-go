@@ -78,7 +78,7 @@ type Server struct {
 	embyRefresh     embyRefresher
 	gallery         galleryIndex
 	jobs            []scrapeJob
-	jobSequence     int
+	jobSequences    map[string]int // 按监控目录分别计数的记录序号，手动任务的目录 ID 为空
 	jobWake         chan struct{}
 	scrapeSlots     scrapeLimiter
 	jobEvents       jobEventHub
@@ -185,6 +185,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/scrape/jobs/{id}/nfo", s.getScrapeJobNFO)
 	s.mux.HandleFunc("POST /api/scrape/jobs/{id}/{action}", s.scrapeJobAction)
 	s.mux.HandleFunc("POST /api/scrape/batch/retry", s.batchRetryScrapeJobs)
+	s.mux.HandleFunc("POST /api/scrape/batch/stop", s.batchStopScrapeJobs)
 	s.mux.HandleFunc("GET /api/custom-rules/keywords", s.getCustomKeywords)
 	s.mux.HandleFunc("POST /api/custom-rules/preview", s.previewCustomRules)
 	s.mux.HandleFunc("GET /api/custom-watermarks", s.listCustomWatermarks)

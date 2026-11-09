@@ -204,7 +204,10 @@ func (s *Server) loadScrapeHistory() error {
 		job.FileInfo = fileInfo
 		job.HasSubtitle = job.FileInfo.HasSubtitle
 		s.jobs = append(s.jobs, job)
-		s.jobSequence = max(s.jobSequence, job.Sequence)
+		if s.jobSequences == nil {
+			s.jobSequences = map[string]int{}
+		}
+		s.jobSequences[job.DirectoryID] = max(s.jobSequences[job.DirectoryID], job.Sequence)
 	}
 	if err := rows.Err(); err != nil {
 		return err

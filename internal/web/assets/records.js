@@ -385,6 +385,19 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
     }
     busy = true;
     let success = 0, failed = 0;
+    if (action === 'stop') {
+      // 一次请求停止全部所选记录：服务端在一次加锁内处理，不会让等待中的任务在停止过程中被启动。
+      try {
+        const result = await api('/api/scrape/batch/stop', { method: 'POST', body: { ids: eligible.map((row) => row.id) } });
+        success = result.success || 0;
+        failed = result.failed?.length || 0;
+        eligible.forEach((row) => selected.delete(row.id));
+        await reload();
+        toast(`停止完成：${success} 条${failed ? `，失败 ${failed} 条` : ''}`, failed > 0);
+      } catch (error) { toast(error.message, true); }
+      finally { busy = false; }
+      return;
+    }
     try {
       for (const row of eligible) {
         try {

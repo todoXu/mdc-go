@@ -97,7 +97,7 @@ func TestScrapeRecordStopDeleteAndRetry(t *testing.T) {
 	}
 	path := filepath.Join(t.TempDir(), "ABP-321.mp4")
 	s.jobs = []scrapeJob{{ID: "queued", Sequence: 1, Path: path, Directory: filepath.Dir(path), Number: "ABP-321", DirectoryID: "library", Status: 0, Settings: &settings}}
-	s.jobSequence = 1
+	s.jobSequences = map[string]int{"library": 1}
 	if response := call(s, "DELETE", "/api/scrape/jobs/queued", ""); response.Code != 409 {
 		t.Fatal(response.Body.String())
 	}
@@ -129,7 +129,7 @@ func TestScrapeRecordStopDeleteAndRetry(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	s.jobsMu.RLock()
-	count, sequence := len(s.jobs), s.jobSequence
+	count, sequence := len(s.jobs), s.jobSequences["library"]
 	s.jobsMu.RUnlock()
 	if count != 1 || sequence != 1 {
 		t.Fatal("retry created another record or consumed a sequence")
@@ -155,7 +155,7 @@ func TestBatchRetryQueuesEligibleAndReportsFailures(t *testing.T) {
 		{ID: "stopped", Sequence: 2, Status: -2, Path: filepath.Join(dir, "ABP-002.mp4"), Number: "ABP-002", DirectoryID: "library", Settings: &settings},
 		{ID: "running", Sequence: 3, Status: 1, Path: filepath.Join(dir, "ABP-003.mp4"), Number: "ABP-003", DirectoryID: "library", Settings: &settings},
 	}
-	s.jobSequence = 3
+	s.jobSequences = map[string]int{"library": 3}
 	response := call(s, "POST", "/api/scrape/batch/retry", `{"ids":["failed","stopped","running","missing","failed"]}`)
 	if response.Code != 200 {
 		t.Fatal(response.Body.String())
@@ -189,7 +189,7 @@ func TestBatchRetryQueuesEligibleAndReportsFailures(t *testing.T) {
 		jobs := append([]scrapeJob(nil), s.jobs...)
 		s.jobsMu.RUnlock()
 		if done {
-			if len(jobs) != 3 || s.jobSequence != 3 || jobs[0].Source != "retry" || jobs[1].Source != "retry" || jobs[0].Sequence != 1 || jobs[2].Status != 1 {
+			if len(jobs) != 3 || s.jobSequences["library"] != 3 || jobs[0].Source != "retry" || jobs[1].Source != "retry" || jobs[0].Sequence != 1 || jobs[2].Status != 1 {
 				t.Fatalf("batch retry changed records: %+v", jobs)
 			}
 			break

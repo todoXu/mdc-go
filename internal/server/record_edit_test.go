@@ -37,7 +37,7 @@ func recordEditorFixture(t *testing.T) (*Server, string) {
 		}
 	}
 	s.jobs = []scrapeJob{{ID: "edit", Sequence: 42, CreatedAt: "original-time", Status: 2, Path: path, Output: path, Settings: &settings, Metadata: &meta, Provenance: map[string]string{"cover": "Javbus"}}}
-	s.jobSequence = 42
+	s.jobSequences = map[string]int{"": 42}
 	return s, path
 }
 
@@ -65,7 +65,7 @@ func TestRecordEditCommitsMetadataNFOAndRename(t *testing.T) {
 	if job.Status != 2 {
 		t.Fatalf("reorganize did not complete: status=%d error=%s", job.Status, job.Error)
 	}
-	if job.ID != "edit" || job.Sequence != 42 || job.CreatedAt != "original-time" || job.Editing || s.jobSequence != 42 || len(s.jobs) != 1 {
+	if job.ID != "edit" || job.Sequence != 42 || job.CreatedAt != "original-time" || job.Editing || s.jobSequences[""] != 42 || len(s.jobs) != 1 {
 		t.Fatalf("identity changed: %+v", job)
 	}
 	if _, err := os.Stat(original); !os.IsNotExist(err) {
