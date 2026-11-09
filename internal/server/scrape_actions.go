@@ -157,8 +157,9 @@ func (s *Server) deletableMediaFiles(job scrapeJob) ([]string, string, error) {
 	}
 
 	if output == "" {
+		// 没有可删除的文件（例如源视频已被手动删除、记录也没有输出）：返回空列表，记录照常删除。
 		if len(files) == 0 {
-			return nil, "", errors.New("该记录没有可删除的媒体数据")
+			return []string{}, "", nil
 		}
 		return files, "", nil
 	}
