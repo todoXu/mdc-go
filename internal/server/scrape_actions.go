@@ -23,27 +23,36 @@ func (s *Server) deleteScrapeJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	deletedDirectory, failure := s.deleteJob(r.PathValue("id"), request.DeleteMedia)
+	if failure != nil {
+		fail(w, failure.status, failure.code, failure.message)
+		return
+	}
+	s.saveScrapeHistory()
+	writeJSON(w, 200, object{"success": true, "deleted_media": request.DeleteMedia, "directory": deletedDirectory})
+}
+
+// deleteJob 删除一条记录；deleteMedia 为 true 时先删除它的媒体文件。不保存历史，由调用方保存。
+// 返回被删除的空文件夹（没有删除文件夹时为空）。
+func (s *Server) deleteJob(id string, deleteMedia bool) (string, *actionError) {
 	s.jobsMu.Lock()
-	defer func() { s.jobsMu.Unlock(); s.saveScrapeHistory() }()
+	defer s.jobsMu.Unlock()
 	for i, job := range s.jobs {
-		if job.ID != r.PathValue("id") {
+		if job.ID != id {
 			continue
 		}
 		if job.Status == 0 || job.Status == 1 || job.Editing {
-			fail(w, 409, "job_active", "请先终止正在等待或处理的记录")
-			return
+			return "", &actionError{409, "job_active", "请先终止正在等待或处理的记录"}
 		}
 		deletedDirectory := ""
-		if request.DeleteMedia {
+		if deleteMedia {
 			files, directory, err := s.deletableMediaFiles(job)
 			if err != nil {
-				fail(w, 400, "unsafe_media_directory", err.Error())
-				return
+				return "", &actionError{400, "unsafe_media_directory", err.Error()}
 			}
 			for _, file := range files {
 				if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
-					fail(w, 500, "delete_media_failed", "删除本地媒体文件失败："+err.Error())
-					return
+					return "", &actionError{500, "delete_media_failed", "删除本地媒体文件失败：" + err.Error()}
 				}
 			}
 			// 文件夹里没有其它文件了才删除文件夹，不会连带删除无关内容。
@@ -58,10 +67,9 @@ func (s *Server) deleteScrapeJob(w http.ResponseWriter, r *http.Request) {
 		// 该监控目录的记录全部删除后，它的序号从 1 重新开始；任务 ID 带时间戳，不会重复。
 		s.resetJobSequenceIfEmpty(job.DirectoryID)
 		s.publishJobChanged(job.ID, true)
-		writeJSON(w, 200, object{"success": true, "deleted_media": request.DeleteMedia, "directory": deletedDirectory})
-		return
+		return deletedDirectory, nil
 	}
-	fail(w, 404, "not_found", "记录不存在")
+	return "", &actionError{404, "not_found", "记录不存在"}
 }
 
 func strictSubdirectory(root, target string) bool {
@@ -411,67 +419,23 @@ func (s *Server) requeueJobLocked(job *scrapeJob, action string, request taskReq
 	return nil
 }
 
-// batchRetryLimit 是一次批量重试最多接受的记录数。页面按更小的批次分段提交，以便显示进度。
-const batchRetryLimit = 500
-
-// batchRetryScrapeJobs 提供 POST /api/scrape/batch/retry，一次重新刮削多条记录。
-// 每条记录的校验和清理与单条重试相同；全部处理完后只保存一次历史，并用一个队列启动任务，
-// 避免逐条请求时每条都整表重写刮削数据库。单条失败不影响其它记录，失败原因逐条返回。
-func (s *Server) batchRetryScrapeJobs(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		IDs   []string   `json:"ids"`
-		Flags *taskFlags `json:"flags,omitempty"`
+// retryJobForBatch 把一条记录重新放回队列，校验和清理旧产物与单条重试相同。不保存历史，也不启动任务。
+func (s *Server) retryJobForBatch(id string, flags *taskFlags) *actionError {
+	task := taskRequest{Flags: flags}
+	settings, failure := s.actionSettings(id, &task)
+	if failure != nil {
+		return failure
 	}
-	if !decode(w, r, &request) {
-		return
-	}
-	if len(request.IDs) == 0 {
-		fail(w, 400, "invalid_ids", "请选择要重新刮削的记录")
-		return
-	}
-	if len(request.IDs) > batchRetryLimit {
-		fail(w, 400, "too_many_ids", fmt.Sprintf("一次最多重新刮削 %d 条记录", batchRetryLimit))
-		return
-	}
-	type batchFailure struct {
-		ID      string `json:"id"`
-		Code    string `json:"code"`
-		Message string `json:"message"`
-	}
-	queued := []string{}
-	failures := []batchFailure{}
-	seen := map[string]bool{}
-	for _, id := range request.IDs {
-		if seen[id] {
-			continue
+	// 每条记录单独加锁：清理旧产物是文件操作，不能在整个批次期间一直挡住列表和运行中的任务。
+	s.jobsMu.Lock()
+	defer s.jobsMu.Unlock()
+	for i := range s.jobs {
+		if s.jobs[i].ID == id {
+			// 与单条带请求体的重试一致：清空番号，由刮削时重新识别。
+			return s.requeueJobLocked(&s.jobs[i], "retry", task, true, settings)
 		}
-		seen[id] = true
-		task := taskRequest{Flags: request.Flags}
-		settings, failure := s.actionSettings(id, &task)
-		if failure == nil {
-			// 每条记录单独加锁：清理旧产物是文件操作，不能在整个批次期间一直挡住列表和运行中的任务。
-			s.jobsMu.Lock()
-			failure = &actionError{404, "not_found", "记录不存在"}
-			for i := range s.jobs {
-				if s.jobs[i].ID == id {
-					// 与原先页面逐条提交时一致：带请求体的重试会清空番号，由刮削时重新识别。
-					failure = s.requeueJobLocked(&s.jobs[i], "retry", task, true, settings)
-					break
-				}
-			}
-			s.jobsMu.Unlock()
-		}
-		if failure != nil {
-			failures = append(failures, batchFailure{ID: id, Code: failure.code, Message: failure.message})
-			continue
-		}
-		queued = append(queued, id)
 	}
-	if len(queued) > 0 {
-		s.saveScrapeHistory()
-		s.startScrapeJobs(queued)
-	}
-	writeJSON(w, 200, object{"success": len(queued), "ids": queued, "failed": failures})
+	return &actionError{404, "not_found", "记录不存在"}
 }
 
 // batchStopLimit 是一次批量停止最多接受的记录数。停止只改内存状态，不涉及文件操作，所以上限比重试大。

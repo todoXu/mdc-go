@@ -157,28 +157,20 @@ func TestBatchRetryQueuesEligibleAndReportsFailures(t *testing.T) {
 	}
 	s.jobSequences = map[string]int{"library": 3}
 	response := call(s, "POST", "/api/scrape/batch/retry", `{"ids":["failed","stopped","running","missing","failed"]}`)
-	if response.Code != 200 {
+	if response.Code != 202 {
 		t.Fatal(response.Body.String())
 	}
-	var result struct {
-		Success int      `json:"success"`
-		IDs     []string `json:"ids"`
-		Failed  []struct {
-			ID   string `json:"id"`
-			Code string `json:"code"`
-		} `json:"failed"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
-		t.Fatal(err)
-	}
-	if result.Success != 2 || strings.Join(result.IDs, ",") != "failed,stopped" {
+	// 批量任务在后台执行，等它结束后读取进度里的结果。重复的 ID 只处理一次。
+	result := waitBulkDone(t, s)
+	// 进度跟踪的是刮削结果：两条入队的记录文件不存在，刮削失败；两条校验失败的直接计入。
+	if result.Action != "retry" || result.Total != 4 || result.Done != 4 || result.Success != 0 {
 		t.Fatalf("queued: %+v", result)
 	}
 	codes := map[string]string{}
 	for _, item := range result.Failed {
 		codes[item.ID] = item.Code
 	}
-	if len(result.Failed) != 2 || codes["running"] != "invalid_status" || codes["missing"] != "not_found" {
+	if len(result.Failed) != 4 || codes["running"] != "invalid_status" || codes["missing"] != "not_found" || codes["failed"] != "scrape_failed" || codes["stopped"] != "scrape_failed" {
 		t.Fatalf("failures: %+v", result.Failed)
 	}
 	// 入队的记录沿用原来的 ID 和序号，不新增记录；跑完后（文件不存在）回到失败状态。

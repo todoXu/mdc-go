@@ -193,10 +193,14 @@ func (s *Server) StartWatcher(ctx context.Context) {
 			s.watchMu.RLock()
 			last := s.watchState.LastScan
 			s.watchMu.RUnlock()
-			if config.Enabled && (force || last == "" || watchScanDue(last, config.IntervalSeconds)) {
+			// 批量删除期间和结束后的一个检查周期内不扫描；暂停期间收到的「立即扫描」保留到暂停结束。
+			held := s.bulk.scansHeld()
+			if !held && config.Enabled && (force || last == "" || watchScanDue(last, config.IntervalSeconds)) {
 				s.scanWatchDirectories(ctx, config)
 			}
-			force = false
+			if !held {
+				force = false
+			}
 			select {
 			case <-ctx.Done():
 				return
@@ -486,6 +490,10 @@ func (s *Server) getWatchStatus(w http.ResponseWriter, r *http.Request) {
 func (s *Server) requestWatchScan(w http.ResponseWriter, r *http.Request) {
 	if !s.currentWatchConfig().Enabled {
 		fail(w, 409, "watcher_disabled", "请先启用目录监控")
+		return
+	}
+	if s.bulk.scansHeld() {
+		fail(w, 409, "scan_held", "批量删除期间监控扫描已暂停，删除结束一个检查周期后自动恢复")
 		return
 	}
 	select {

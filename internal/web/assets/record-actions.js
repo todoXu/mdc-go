@@ -128,30 +128,15 @@ export function taskDialog(job, changed) {
 
 // 批量重新刮削：与单条「重新任务」窗口的标识选项相同，但不支持手动指定番号或网址，
 // 每条记录沿用它自己的番号和数据源。
-// 确认后窗口立即关闭（onStart），提交在后台分批进行：onProgress(已提交, 总数)，全部提交完调用 onDone(成功, 失败)。
-export function batchRetryDialog(jobs, { onStart, onProgress, onDone }) {
+// 确认后一次提交全部记录，由服务端在后台逐条处理；刷新或关闭页面不影响。提交成功后调用 onStarted，进度由列表页显示。
+export function batchRetryDialog(jobs, { onStarted }) {
   const element=dialog(`批量重新刮削 · ${jobs.length} 条`, `<p class="rd-hint rd-intro">对所选记录重新刮削并整理文件。批量操作不能指定番号或网址，每条记录沿用自己的番号和默认数据源。</p>${flagsHTML()}`, '确认执行');
   onSubmit(element,async()=>{
     const data=new FormData(element.querySelector('form')), mosaic=data.get('mosaicFlag') || '';
     const flags={clear:data.has('clear'),subtitle:data.has('subtitle'),ltx:mosaic==='ltx',lada:mosaic==='lada',jav:mosaic==='jav',hack:mosaic==='hack',uncensored:mosaic==='uncensored',resolution:data.get('resolution') || ''};
     const body=Object.values(flags).some(Boolean)?flags:null;
-    element.close();
-    onStart?.();
-    // 分批提交：每批一个请求，服务端每批只保存一次记录。不等待提交结束，窗口已经关闭。
-    (async()=>{
-      const chunk=20;
-      let success=0, failed=0;
-      for (let start=0; start<jobs.length; start+=chunk) {
-        const ids=jobs.slice(start, start+chunk).map(job=>job.id);
-        try {
-          const result=await api('/api/scrape/batch/retry',{method:'POST',body:{ids,flags:body},timeout:120000});
-          success+=result.success || 0;
-          failed+=result.failed?.length || 0;
-        } catch { failed+=ids.length; }
-        onProgress?.(Math.min(start+chunk, jobs.length), jobs.length);
-      }
-      await onDone(success, failed);
-    })();
+    await api('/api/scrape/batch/retry',{method:'POST',body:{ids:jobs.map(job=>job.id),flags:body}});
+    onStarted?.();
   });
 }
 

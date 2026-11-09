@@ -97,7 +97,7 @@ function modeLabel(row) {
 
 export function recordsTableHTML() {
   return `<section class="panel record-detail">
-    <div class="record-selection" id="record-selection"><span class="record-selection-count"></span><button type="button" class="record-select-btn" id="record-select-filtered">全选</button><button type="button" class="record-select-btn" id="record-select-page" hidden>全选本页</button><div class="record-selection-actions"><button type="button" class="button small" data-bulk-action="stop">停止</button><button type="button" class="button small" data-bulk-action="retry">重新刮削</button><button type="button" class="button small danger" data-bulk-action="delete">删除</button></div></div>
+    <div class="record-selection" id="record-selection"><span class="record-selection-count"></span><button type="button" class="record-select-btn" id="record-select-filtered">全选</button><button type="button" class="record-select-btn" id="record-select-page" hidden>全选本页</button><div class="bulk-status" id="bulk-progress" role="status" hidden></div><div class="record-selection-actions"><button type="button" class="button small" data-bulk-action="stop">停止</button><button type="button" class="button small" data-bulk-action="retry">重新刮削</button><button type="button" class="button small danger" data-bulk-action="delete">删除</button></div></div>
     <div class="table-wrap">
       <table class="records-table">
         <thead>
@@ -358,17 +358,11 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
       const rows = jobs.filter((row) => selected.has(row.id) && [2, -1, -2].includes(row.status)).sort((a, b) => a.sequence - b.sequence);
       if (!rows.length) { toast('所选记录没有可执行的项目', true); return; }
       batchRetryDialog(rows, {
-        // 窗口关闭时就取消勾选：列表在有勾选的记录时会暂停自动刷新，取消后才能看到正在刮削的记录。
-        onStart: () => {
+        // 提交成功就取消勾选：列表在有勾选的记录时会暂停自动刷新，取消后才能看到正在刮削的记录。
+        onStarted: () => {
           rows.forEach((row) => selected.delete(row.id));
           render();
-          toast(`正在提交重新刮削：0 / ${rows.length}`);
-        },
-        onProgress: (done, total) => { if (done < total) toast(`正在提交重新刮削：${done} / ${total}`); },
-        onDone: async (success, failed) => {
-          // 提交期间已经离开这个列表时不重新加载，以免刷掉当前页面；列表本身由推送事件更新。
-          if (host.isConnected) await reload();
-          toast(`已加入处理队列：${success} 条${failed ? `，失败 ${failed} 条` : ''}`, failed > 0);
+          followBulk(true);
         },
       });
       return;
@@ -398,23 +392,72 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
       finally { busy = false; }
       return;
     }
+    // 删除交给服务端后台执行：刷新或关闭页面不会中断，进度显示在列表上方。
     try {
-      for (const row of eligible) {
-        try {
-          const endpoint = '/api/scrape/jobs/' + encodeURIComponent(row.id);
-          if (action === 'delete') {
-            const removeMedia = deleteMedia && Boolean(row.output || row.path);
-            await api(endpoint, { method: 'DELETE', body: removeMedia ? { delete_media: true } : {} });
-          }
-          else await api(endpoint + '/' + action, { method: 'POST' });
-          selected.delete(row.id);
-          success++;
-        } catch { failed++; }
-      }
-      await reload();
-      toast(`${action === 'stop' ? '停止' : action === 'retry' ? '重新刮削' : '删除'}完成：${success} 条${failed ? `，失败 ${failed} 条` : ''}` , failed > 0);
-    } finally { busy = false; }
+      await api('/api/scrape/batch/delete', { method: 'POST', body: { ids: eligible.map((row) => row.id), delete_media: deleteMedia } });
+      eligible.forEach((row) => selected.delete(row.id));
+      render();
+      followBulk(true);
+    } catch (error) { toast(error.message, true); }
+    finally { busy = false; }
   };
+  // 后台批量任务（删除、重新刮削）的进度条。挂载时先查一次，任务在运行就接着显示，所以刷新页面后进度还在。
+  const bulkNames = { delete: '删除', retry: '重新刮削' };
+  let following = false;
+  // 进度嵌在选择栏里：一行文字加一条细进度条。结束后几秒自动收起，有失败时保留，直到点 ×。
+  let bulkHideTimer = null;
+  const showBulk = (state, finished) => {
+    const box = document.querySelector('#bulk-progress');
+    if (!box) return;
+    clearTimeout(bulkHideTimer);
+    const name = bulkNames[state.action] || '处理';
+    const failures = state.failed || [];
+    const pct = state.total ? Math.round((state.done / state.total) * 100) : 0;
+    const waiting = !finished && state.phase === 'waiting_scan';
+    const text = finished ? `已${name} ${state.success} 条` : waiting ? `等待扫描结束后${name}…` : `正在${name} ${state.done} / ${state.total}`;
+    const label = (id) => jobs.find((row) => row.id === id)?.number || id;
+    const hint = state.action === 'delete' ? (finished ? '监控扫描将在一个检查周期后恢复' : '删除期间监控扫描已暂停') : '';
+    box.hidden = false;
+    box.className = `bulk-status${finished ? (failures.length ? ' is-warn' : ' is-done') : ''}`;
+    box.title = hint;
+    box.innerHTML = `<span class="bulk-status-text">${h(text)}</span>`
+      + (finished ? '' : `<span class="bulk-status-bar"><i style="width:${waiting ? 0 : pct}%"></i></span>`)
+      + (failures.length ? `<details class="bulk-status-failed"><summary>失败 ${failures.length}</summary><ul>${failures.map((item) => `<li>${h(label(item.id))}：${h(item.message)}</li>`).join('')}</ul></details>` : '')
+      + (finished ? '<button type="button" class="bulk-status-close" data-bulk-close aria-label="关闭">×</button>' : '');
+    const close = box.querySelector('[data-bulk-close]');
+    if (close) close.onclick = () => { box.hidden = true; };
+    if (finished && !failures.length) bulkHideTimer = setTimeout(() => { box.hidden = true; }, 5000);
+  };
+  // started 为 true 表示任务是本页刚提交的：任务很快（例如几十条重试不到 0.1 秒）时，第一次查询前就已结束，
+  // 也要显示结果。挂载时调用不带参数，只接上仍在运行的任务，页面打开前就结束的任务不再提示。
+  const followBulk = async (started = false) => {
+    if (following) return;
+    following = true;
+    let seenRunning = started;
+    try {
+      while (host.isConnected) {
+        let state;
+        try { state = await api('/api/scrape/batch'); }
+        catch { await new Promise((resolve) => setTimeout(resolve, 2000)); continue; }
+        if (!host.isConnected) return;
+        if (!state.running) {
+          // 只显示本页看到运行过的任务结果；页面打开前就已结束的任务不再提示。
+          if (seenRunning) {
+            // reload 会重建整个页面，所以先刷新列表，再把结果写到新页面的进度条里。
+            await reload();
+            showBulk(state, true);
+            const failures = state.failed?.length || 0;
+            toast(`批量${bulkNames[state.action] || '处理'}完成：成功 ${state.success} 条${failures ? `，失败 ${failures} 条` : ''}`, failures > 0);
+          }
+          return;
+        }
+        seenRunning = true;
+        showBulk(state, false);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    } finally { following = false; }
+  };
+  followBulk();
   const openMenu = (row, trigger) => {
     // 每次打开都重新查找菜单：页面重新渲染后，挂载时保存的节点已脱离文档，showPopover 会报错。
     const menu = $('#record-action-menu');

@@ -69,6 +69,7 @@ type Server struct {
 	watchMu         sync.RWMutex
 	watchState      watchState
 	watchWake       chan struct{}
+	bulk            bulkOperation // 后台批量删除、批量重新刮削的进度
 	jobsMu          sync.RWMutex
 	historyMu       sync.Mutex
 	historyChanged  historyChanges
@@ -186,6 +187,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/scrape/jobs/{id}/{action}", s.scrapeJobAction)
 	s.mux.HandleFunc("POST /api/scrape/batch/retry", s.batchRetryScrapeJobs)
 	s.mux.HandleFunc("POST /api/scrape/batch/stop", s.batchStopScrapeJobs)
+	s.mux.HandleFunc("POST /api/scrape/batch/delete", s.batchDeleteScrapeJobs)
+	s.mux.HandleFunc("GET /api/scrape/batch", s.getBulkStatus)
 	s.mux.HandleFunc("GET /api/custom-rules/keywords", s.getCustomKeywords)
 	s.mux.HandleFunc("POST /api/custom-rules/preview", s.previewCustomRules)
 	s.mux.HandleFunc("GET /api/custom-watermarks", s.listCustomWatermarks)

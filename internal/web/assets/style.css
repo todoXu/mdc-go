@@ -825,6 +825,18 @@ td {
   gap: 12px;
 }
 .record-selection .record-select-btn { height: 30px; width: auto; min-width: 96px; font-size: 12px; }
+/* 后台批量任务的进度，嵌在选择栏里 */
+.bulk-status { display: inline-flex; align-items: center; gap: 10px; height: 30px; padding: 0 12px; border: 1px solid #dfe6f5; border-radius: 15px; background: #fff; color: #4a5462; font-size: 12px; white-space: nowrap; position: relative; }
+.bulk-status[hidden] { display: none; }
+.bulk-status-bar { width: 120px; height: 4px; border-radius: 2px; background: #e8edf7; overflow: hidden; }
+.bulk-status-bar i { display: block; height: 100%; background: var(--blue); transition: width 0.3s ease; }
+.bulk-status.is-done { color: #1f8a4c; border-color: #cfe9da; background: #f4fbf7; }
+.bulk-status.is-warn { color: #b45309; border-color: #f3dcc0; background: #fffaf3; }
+.bulk-status-failed summary { cursor: pointer; color: #c2410c; list-style: none; }
+.bulk-status-failed summary::-webkit-details-marker { display: none; }
+.bulk-status-failed ul { position: absolute; top: 36px; left: 0; z-index: 20; min-width: 280px; max-height: 220px; overflow: auto; margin: 0; padding: 8px 12px 8px 26px; border: 1px solid #e3e7ee; border-radius: 8px; background: #fff; box-shadow: 0 6px 18px rgba(30, 40, 60, 0.12); color: #4a5462; white-space: normal; }
+.bulk-status-close { border: 0; background: none; color: inherit; font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; opacity: 0.7; }
+.bulk-status-close:hover { opacity: 1; }
 .record-selection-actions {
   display: flex;
   gap: 8px;
