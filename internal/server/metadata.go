@@ -64,7 +64,7 @@ func (s *Server) verifyActorMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if updated {
-		go s.stopJobsForConfigChange()
+		go s.stopJobsForConfigChange("actor mapping verify")
 	}
 	writeJSON(w, 200, object{"valid": true, "document_url": document, "updated": updated})
 }
@@ -91,7 +91,7 @@ func (s *Server) checkActorMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if updated {
-		go s.stopJobsForConfigChange()
+		go s.stopJobsForConfigChange("actor mapping check")
 	}
 	writeJSON(w, 200, object{"success": true, "updated": updated})
 }

@@ -355,7 +355,7 @@ func (s *Server) uploadCustomWatermark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("[custom] 已上传自定义水印", "name", name, "size", len(data))
-	go s.stopJobsForConfigChange()
+	go s.stopJobsForConfigChange("custom watermark upload")
 	writeJSON(w, 200, object{"success": true, "file": customWatermarkFile{Name: name, Width: config.Width, Height: config.Height, Size: int64(len(data))}})
 }
 
@@ -384,7 +384,7 @@ func (s *Server) deleteCustomWatermark(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("[custom] 已删除自定义水印", "name", name)
-	go s.stopJobsForConfigChange()
+	go s.stopJobsForConfigChange("custom watermark delete")
 	writeJSON(w, 200, object{"success": true})
 }
 

@@ -155,7 +155,7 @@ func (s *Server) putPriorities(w http.ResponseWriter, r *http.Request) {
 	s.priorities = p
 	if after, _ := json.Marshal(p); !jsonEqual(before, after) {
 		// 持有 s.mu，停止任务需放到后台执行。
-		go s.stopJobsForConfigChange()
+		go s.stopJobsForConfigChange("priorities")
 	}
 	writeJSON(w, 200, object{"success": true})
 }

@@ -379,7 +379,7 @@ func (s *Server) putConfig(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "save_failed", "无法保存本地配置")
 		return
 	}
-	changed := !jsonEqual(current, next)
+	changed := configChangeStopsTasks(section, current, next)
 	s.configs = updated
 	if section == "common" {
 		if removed := removedWatchDirectories(current, next); len(removed) > 0 {
@@ -389,7 +389,7 @@ func (s *Server) putConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if changed {
 		// 在持有 s.mu 时不能等待 jobsMu，所以放到后台执行。
-		go s.stopJobsForConfigChange()
+		go s.stopJobsForConfigChange("config:" + section)
 	}
 	if section == "common" {
 		select {
