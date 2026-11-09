@@ -37,18 +37,22 @@ var plugin = {
     return true;
   },
   fetch: function(input) {
+    var pageURL = "";
     if (/^https?:\/\//i.test(input)) {
       var prefix = (config.BaseURL || manifest.BaseURL).replace(/\/$/, "") + "/";
       if (input.indexOf(prefix) !== 0 || /[?#]/.test(input)) fail("invalid_number", "作品链接必须属于当前数据源");
       input = decodeURIComponent(input.slice(prefix.length));
       if (input.indexOf("/") >= 0) fail("invalid_number", "请输入作品详情链接");
+      // 网址路径可能带日期等后缀（NTRD-019_2015-01-29），必须直接请求原网址；番号只取下划线前面的部分。
+      pageURL = prefix + encodeURIComponent(input);
+      input = input.replace(/_.*$/, "");
     }
     var number = host.normalize(input);
     if (!number) fail("invalid_number", "请输入有效番号，不要填写网址或文件路径");
-    var page = request(base() + "/" + encodeURIComponent(number), {});
-    // 站点的页面地址不带前导数字（406FTHT-146 是 /FTHT-146），找不到时去掉后再请求一次。
+    var page = request(pageURL || (base() + "/" + encodeURIComponent(number)), {});
+    // 站点的页面地址不带前导数字（406FTHT-146 是 /FTHT-146），找不到时去掉后再请求一次；网址直接请求时不改。
     var bare = number.replace(/^\d+(?=[A-Z])/, "");
-    if (page.status === 404 && bare !== number) { number = bare; page = request(base() + "/" + encodeURIComponent(number), {}); }
+    if (!pageURL && page.status === 404 && bare !== number) { number = bare; page = request(base() + "/" + encodeURIComponent(number), {}); }
     check(page);
     var titleNode = first(page, "h3"), coverNode = first(page, ".bigImage img");
     var trailerNode = first(page, "video source[src], video[src], meta[property='og:video:url'][content], meta[property='og:video'][content]");

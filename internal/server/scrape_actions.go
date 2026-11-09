@@ -332,9 +332,6 @@ func (s *Server) actionSettings(id string, request *taskRequest) (scrapeSettings
 		if err := s.resolveTaskURL(&settings, request.URL); err != nil {
 			return settings, &actionError{400, "invalid_url", err.Error()}
 		}
-		if request.Number == "" {
-			request.Number = detectNumber(request.URL)
-		}
 	}
 	settings.OverrideNumber = request.Number
 	if !supportedLinkMode(settings.Common.LinkMode) {
