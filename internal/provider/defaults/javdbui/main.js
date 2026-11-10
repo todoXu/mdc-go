@@ -18,6 +18,20 @@ function api() {
   if (custom && typeof custom === "string") return custom.replace(/\/$/, "");
   return DEFAULT_API;
 }
+// 站点后来把搜索、详情接口改成要登录：未登录时返回
+// {"success":0,"action":"JWTVerificationError","message":"請登錄帳號"}。
+// 登录态存在浏览器 localStorage 的 javdb.auth.session 里（{"token":"eyJ...","user":{…}}），
+// 前端把它原样放进 authorization 头，没有 Bearer 前缀。把 token 填到插件扩展配置即可：
+//   options: {"token": "eyJ..."}
+function token() {
+  var options = config.Options || {};
+  var value = options.token;
+  return typeof value === "string" ? value.trim() : "";
+}
+function loginHint() {
+  if (token()) return "登录凭证已失效：请在浏览器重新登录站点，再把 localStorage 里 javdb.auth.session 的 token 重新填到插件扩展配置";
+  return "站点接口现在要求登录：请在浏览器打开站点并登录，然后把 localStorage 里 javdb.auth.session 的 token 填到插件扩展配置，格式 {\"token\":\"eyJ...\"}";
+}
 
 // ---------- MD5（goja 里没有 crypto，签名只能自己算） ----------
 function utf8Bytes(text) {
@@ -96,9 +110,12 @@ function getJSON(path, query) {
     }
     if (parts.length) url += "?" + parts.join("&");
   }
+  var headers = {accept: "application/json", jdsignature: signature()};
+  var jwt = token();
+  if (jwt) headers.authorization = jwt;
   var page = host.request(url, {
     accept_language: "zh-CN,zh;q=0.9,ja;q=0.8",
-    headers: {accept: "application/json", jdsignature: signature()}
+    headers: headers
   });
   check(page);
   var data;
@@ -110,6 +127,7 @@ function getJSON(path, query) {
   if (!data || data.success !== 1) {
     var action = (data && data.action) || "", message = (data && data.message) || "";
     if (action === "InvalidSignature") fail("plugin_error", "接口签名被拒绝（InvalidSignature），站点可能更新了签名规则");
+    if (/JWT/i.test(action)) fail("verification_required", loginHint());
     if (/NotFound|NoSuch/i.test(action)) fail("not_found", "数据源没有找到这个番号");
     fail("upstream_error", "数据源接口报错：" + (message || action || "未知错误"));
   }

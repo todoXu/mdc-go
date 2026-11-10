@@ -2,8 +2,8 @@
   "api_version": 2,
   "id": "javdbui",
   "name": "javdbui",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "engine": "javascript-v1",
   "base_url": "https://catembylegacy.fastcdn.dpdns.org",
-  "input_hint": ""
+  "input_hint": "SSNI-716 或作品链接；接口需要登录，把浏览器 localStorage 里 javdb.auth.session 的 token 填到插件扩展配置 {\"token\":\"eyJ...\"}"
 }
