@@ -147,6 +147,8 @@ function locate(input) {
     return {number: "", id: hit[1]};
   }
   var number = host.normalize(text);
+  // FC2 的站内写法是 FC2-880652，没有 PPV；去掉 PPV 后再搜索和比较。
+  if (number) number = number.replace(/^FC2-PPV-/, "FC2-");
   if (!number) fail("invalid_number", "请输入有效番号或作品链接");
   return {number: number, id: ""};
 }

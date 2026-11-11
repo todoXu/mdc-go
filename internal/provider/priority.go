@@ -33,6 +33,8 @@ type MergeHooks struct {
 // 406FTHT-146 与 FTHT-146 视为同一作品（站点常省略前导数字）。
 func bareNumberKey(number string) string {
 	key := strings.ToUpper(strings.ReplaceAll(number, "-", ""))
+	// FC2 的站点写法没有 PPV：FC2-PPV-880652 与 FC2-880652 视为同一作品。
+	key = strings.Replace(key, "FC2PPV", "FC2", 1)
 	i := 0
 	for i < len(key) && key[i] >= '0' && key[i] <= '9' {
 		i++

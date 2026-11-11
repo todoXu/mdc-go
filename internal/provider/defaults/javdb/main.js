@@ -57,6 +57,8 @@ function locate(input) {
   }
   var number = host.normalize(input);
   if (!number) fail("invalid_number", "请输入有效番号或作品详情链接");
+  // FC2 的站内写法是 FC2-880652，没有 PPV；去掉 PPV 后再搜索和比较。
+  number = number.replace(/^FC2-PPV-/, "FC2-");
   var paths = searchJavdb(number, number);
   // 站点列表的番号可能不带前导数字（406FTHT-146 收录为 FTHT-146），去掉后再搜一次。
   var bare = number.replace(/^\d+(?=[A-Z])/, "");

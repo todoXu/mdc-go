@@ -1300,13 +1300,14 @@ func (s *Server) scrapeInPlace(ctx context.Context, path, override string, setti
 		return "", nil, errors.New("文件已不存在或不符合过滤规则")
 	}
 	number := override
-	if number == "" {
+	// 使用覆盖网址且没有填写覆盖番号时，番号以网页里的为准（见下方的预抓取），不从文件名识别。
+	if number == "" && settings.OverrideURL == "" {
 		number = detectNumber(pathWithoutJunk(path, settings.Common.Junk))
+		if number == "" {
+			return "", nil, errors.New("无法从文件名识别番号，请单独提交并填写番号")
+		}
+		traceScrape(ctx, "解析番号", "番号识别结果："+number)
 	}
-	if number == "" {
-		return "", nil, errors.New("无法从文件名识别番号，请单独提交并填写番号")
-	}
-	traceScrape(ctx, "解析番号", "番号识别结果："+number)
 	var priorities provider.Priorities
 	if settings.Priorities != nil {
 		priorities = provider.Priorities{ByFields: maps.Clone(settings.Priorities.ByFields)}
@@ -1337,6 +1338,26 @@ func (s *Server) scrapeInPlace(ctx context.Context, path, override string, setti
 			configs[id] = config
 		}
 		s.mu.RUnlock()
+	}
+	// 覆盖网址且没有覆盖番号：先抓取覆盖网址的页面，用页面里的番号作为本次刮削的番号。
+	// 这次的抓取结果留给合并时使用，覆盖数据源不会再请求一次。
+	var preFetched *provider.Metadata
+	if number == "" {
+		overrideSource, err := s.providers.Get(settings.OverrideProvider)
+		if err != nil {
+			return "", nil, err
+		}
+		meta, err := overrideSource.Fetch(ctx, configs[settings.OverrideProvider], settings.OverrideURL)
+		if err != nil {
+			return "", nil, fmt.Errorf("覆盖网址抓取失败：%w", err)
+		}
+		pageNumber, err := provider.NormalizeNumber(meta.Number)
+		if err != nil {
+			return "", nil, errors.New("覆盖网址页面里的番号无效")
+		}
+		number = pageNumber
+		preFetched = &meta
+		traceScrape(ctx, "解析番号", "番号来自覆盖网址页面："+number)
 	}
 	fetched := map[string]provider.Metadata{}
 	var fetchedMu sync.Mutex
@@ -1374,11 +1395,16 @@ func (s *Server) scrapeInPlace(ctx context.Context, path, override string, setti
 		if id == settings.OverrideProvider && settings.OverrideURL != "" {
 			input = settings.OverrideURL
 		}
-		meta, err := source.Fetch(ctx, config, input)
-		// 按数据源的「失败重复次数」重新请求；任务已取消或超时后不再重试。
-		for attempt := 1; err != nil && attempt <= config.RetryTimes && ctx.Err() == nil; attempt++ {
-			traceScrape(ctx, "刮削数据", fmt.Sprintf("抓取失败，第 %d 次重复请求 <%s>：%s", attempt, id, err.Error()))
+		var meta provider.Metadata
+		if preFetched != nil && id == settings.OverrideProvider {
+			meta = *preFetched
+		} else {
 			meta, err = source.Fetch(ctx, config, input)
+			// 按数据源的「失败重复次数」重新请求；任务已取消或超时后不再重试。
+			for attempt := 1; err != nil && attempt <= config.RetryTimes && ctx.Err() == nil; attempt++ {
+				traceScrape(ctx, "刮削数据", fmt.Sprintf("抓取失败，第 %d 次重复请求 <%s>：%s", attempt, id, err.Error()))
+				meta, err = source.Fetch(ctx, config, input)
+			}
 		}
 		elapsed := time.Since(started).Seconds()
 		if err != nil {

@@ -155,15 +155,15 @@ func (s *Server) prepareScrapeImages(ctx context.Context, path, base string, met
 			selected = meta.Provider
 		}
 		if selected != "" {
-			found := false
+			// 已选定的来源（人工在编辑元数据时选择的，或上次刮削的实际来源）排在最前面，
+			// 不再按字段优先级顺序，否则它排在后面时会被其他来源替代。
+			rest := make([]string, 0, len(order))
 			for _, id := range order {
-				if id == selected {
-					found = true
+				if id != selected {
+					rest = append(rest, id)
 				}
 			}
-			if !found {
-				order = append([]string{selected}, order...)
-			}
+			order = append([]string{selected}, rest...)
 		}
 		var best downloadedImage
 		seen := map[string]bool{}
