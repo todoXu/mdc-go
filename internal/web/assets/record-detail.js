@@ -12,6 +12,7 @@ function failureNotes(job) {
 }
 import { onJobEvents } from './job-events.js';
 import { sortRecords, sortFromQuery } from './records.js';
+import { bindArrowPaging } from './pager-keys.js';
 
 const statuses = {0: '等待中', 1: '处理中', 2: '成功', '-1': '失败', '-2': '已终止'};
 // 上一条、下一条按列表当前顺序计算；筛选条件来自地址栏的 filter 和 q。
@@ -31,10 +32,10 @@ async function loadNeighbors(job, back) {
     ), sortFromQuery(query));
     const index = rows.findIndex((row) => row.id === job.id);
     const suffix = query.toString() ? `?${query.toString()}` : '';
-    const link = (row, label) => `<a class="button small" href="#${h(back)}/records/${encodeURIComponent(row.id)}${h(suffix)}">${label}</a>`;
+    const link = (row, label, direction) => `<a class="button small" data-neighbor="${direction}" href="#${h(back)}/records/${encodeURIComponent(row.id)}${h(suffix)}">${label}</a>`;
     const previous = index > 0 ? rows[index - 1] : null;
     const next = index >= 0 && index < rows.length - 1 ? rows[index + 1] : null;
-    neighborNav = index < 0 ? '' : `<span class="record-position">${index + 1} / ${rows.length}</span>${previous ? link(previous, '← 上一条') : '<span class="button small" aria-disabled="true">← 上一条</span>'}${next ? link(next, '下一条 →') : '<span class="button small" aria-disabled="true">下一条 →</span>'}`;
+    neighborNav = index < 0 ? '' : `<span class="record-position">${index + 1} / ${rows.length}</span>${previous ? link(previous, '← 上一条', 'prev') : '<span class="button small" aria-disabled="true">← 上一条</span>'}${next ? link(next, '下一条 →', 'next') : '<span class="button small" aria-disabled="true">下一条 →</span>'}`;
   } catch {
     neighborNav = '';
   }
@@ -96,7 +97,7 @@ function content(job, back, nfo) {
     <div class="scrape-poster">${poster ? imageGallery([poster], '海报', previews) : '<div class="scrape-poster-empty">暂无海报</div>'}</div>
     <div class="scrape-overview"><h1>${h(meta.number || job.number || '未识别番号')} ${h(meta.title || '')}</h1>
     <div class="record-status-actions"><span class="record-status record-status-${h(job.status)}">${h(statuses[job.status] || '未知状态')}</span>${recordActionButtons(job)}</div>
-    <p class="scrape-byline">${[meta.rating ? '★ '+meta.rating : '',value(meta.actors || job.actors),meta.release,meta.runtime ? meta.runtime+' 分钟' : ''].filter(Boolean).map(h).join(' · ')}</p>
+    <p class="scrape-byline">${[meta.rating ? '★ '+meta.rating : '',value(nfo?.exists && nfo.fields ? listOf(nfo.fields.actors) : meta.actors || job.actors),meta.release,meta.runtime ? meta.runtime+' 分钟' : ''].filter(Boolean).map(h).join(' · ')}</p>
     <div class="scrape-tags">${tags}</div>
     <p class="muted">导演：${h(value(meta.director))}　制作：${h(value(meta.studio))}　系列：${h(value(meta.series))}</p>
     ${job.error ? `<div class="scrape-error" role="alert">${h(job.error)}</div>` : ''}
@@ -251,6 +252,8 @@ export async function scrapeRecordPage(path) {
         root.innerHTML = content(job,back,nfo);
       };
       bindRecordActions(root,()=>job,reload,back);
+      // 方向键切换上一条、下一条。注册在 root 上：内容重绘时 root 不变，按钮每次按键时重新查找。
+      bindArrowPaging(root, () => root.querySelector('.record-neighbors a[data-neighbor="prev"]'), () => root.querySelector('.record-neighbors a[data-neighbor="next"]'));
       const refresh = async () => {
         // 定时器已经执行或被清除，重置标记，之后的推送才能再次安排刷新。
         timer = null;

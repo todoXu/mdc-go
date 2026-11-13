@@ -1,4 +1,5 @@
 import { api, escapeHTML as h } from './api.js';
+import { bindArrowPaging } from './pager-keys.js';
 
 // 补头像进度：页面上的进度条显示已处理数、成功数、失败数和失败明细。
 function renderFillProgress(state) {
@@ -70,6 +71,39 @@ const galleryURL = (source, path) => `/api/actor-gallery/${source}/image?path=${
 const hashQuery = () => new URLSearchParams(location.hash.split('?')[1] || '');
 const initial = (name) => h([...String(name || '?')][0]);
 
+// 从演员详情返回列表时恢复滚动位置和列表状态（页码、筛选、搜索）。
+const returnKey = 'actors-return';
+function takeActorReturn() {
+  let state = null;
+  try { state = JSON.parse(sessionStorage.getItem(returnKey) || 'null'); } catch { state = null; }
+  sessionStorage.removeItem(returnKey);
+  return state && typeof state.hash === 'string' && state.hash.startsWith('#/actors') && state.y > 0 ? state : null;
+}
+// 点击演员卡片（进入详情）之前记下列表地址和滚动位置；路由切换后页面内容已被替换，无法再读取。
+if (!window.actorsReturnBound) {
+  window.actorsReturnBound = true;
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest?.('#actor-grid .actor-card')) return;
+    sessionStorage.setItem(returnKey, JSON.stringify({ hash: location.hash, y: window.scrollY }));
+  }, true);
+}
+// 路由渲染完成后页面会滚到顶部，所以要等到这一步之后再恢复；图片懒加载可能让页面暂时不够高，失败时重试。
+// 用户一滚动或按键就停止，不抢滚动条。
+function restoreActorsScroll(y) {
+  let tries = 0;
+  let stopped = false;
+  const stop = () => { stopped = true; };
+  window.addEventListener('wheel', stop, { once: true, passive: true });
+  window.addEventListener('touchmove', stop, { once: true, passive: true });
+  window.addEventListener('keydown', stop, { once: true });
+  const attempt = () => {
+    if (stopped) return;
+    window.scrollTo(0, y);
+    if (Math.abs(window.scrollY - y) > 2 && tries++ < 20) setTimeout(attempt, 100);
+  };
+  setTimeout(attempt, 0);
+}
+
 function formatTime(value) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime()) || date.getFullYear() < 2000) return '';
@@ -126,6 +160,14 @@ export async function actorsPage({ heading, toast, reload }) {
         <div class="actor-grid" id="actor-grid"></div><div id="actor-empty"></div>
         <div class="actor-pager"><button class="button small" type="button" id="actor-prev">‹ 上一页</button><span id="actor-page-info"></span><button class="button small" type="button" id="actor-next">下一页 ›</button>${jumpHTML('actor-page-input')}</div></section>`,
     bind() {
+      const returnState = takeActorReturn();
+      if (returnState && location.hash === '#/actors' && returnState.hash !== '#/actors') {
+        // 返回时地址只有 #/actors，先切回进入详情前的地址（带页码、筛选、搜索），再恢复位置。
+        sessionStorage.setItem(returnKey, JSON.stringify(returnState));
+        location.replace(returnState.hash);
+        return;
+      }
+      const shouldRestore = Boolean(returnState) && returnState.hash === location.hash;
       const query = hashQuery();
       let filter = query.get('filter') === 'missing' ? 'missing' : 'all';
       let sort = query.get('sort') === 'name' ? 'name' : 'movies';
@@ -168,6 +210,7 @@ export async function actorsPage({ heading, toast, reload }) {
       document.querySelector('#actor-sort').onchange = (event) => { sort = event.target.value; page = 1; render(); };
       document.querySelector('#actor-prev').onclick = () => { page--; render(); window.scrollTo(0, 0); };
       document.querySelector('#actor-next').onclick = () => { page++; render(); window.scrollTo(0, 0); };
+      bindArrowPaging(document.querySelector('.actor-pager'), () => document.querySelector('#actor-prev'), () => document.querySelector('#actor-next'));
       // 窗口宽度变化后列数会变，重新按整行分页。
       const grid = document.querySelector('#actor-grid');
       let columns = gridColumns(grid);
@@ -228,6 +271,7 @@ export async function actorsPage({ heading, toast, reload }) {
         setTimeout(() => { if (location.hash.split('?')[0] === hash.split('?')[0]) reload({ silent: true }); }, 4000);
       }
       render();
+      if (shouldRestore) restoreActorsScroll(returnState.y);
     },
   };
 }
@@ -364,6 +408,8 @@ function avatarDialog(actor, onSaved, toast) {
     }
   };
   dialog.addEventListener('close', () => dialog.remove(), { once: true });
+  // 写真翻页按钮每次渲染都会重建，所以按键时再查找；没有写真标签时按钮不存在，不做任何事。
+  bindArrowPaging(dialog, () => dialog.querySelector('[data-photo-page="-1"]'), () => dialog.querySelector('[data-photo-page="1"]'));
   render();
   dialog.showModal();
 }

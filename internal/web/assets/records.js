@@ -1,6 +1,7 @@
 import { api, escapeHTML as h } from './api.js';
 import { deleteRecordDialog, taskDialog, batchRetryDialog } from './record-actions.js';
 import { durationHTML } from './duration.js';
+import { bindArrowPaging } from './pager-keys.js';
 
 const statusNames = { 0: '等待中', 1: '处理中', 2: '成功', '-1': '失败', '-2': '已终止' };
 const statusValues = { waiting: 0, processing: 1, finished: 2, failed: -1, stopped: -2 };
@@ -673,6 +674,7 @@ export function mountRecordsTable({ jobs, filter, setFilter, empty, reload, toas
   };
   $('#record-prev').onclick = () => goToPage(page - 1);
   $('#record-next').onclick = () => goToPage(page + 1);
+  bindArrowPaging($('.records-pagination'), () => $('#record-prev'), () => $('#record-next'));
   $('#record-page-size').onchange = (event) => {
     pageSize = Number(event.target.value);
     page = 1;
