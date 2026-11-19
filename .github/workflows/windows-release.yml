@@ -1,0 +1,136 @@
+name: windows-release
+
+# 修改 internal/server/version.go 中的版本号并推送到 main 分支时，
+# 编译 Windows x64 单文件程序，打包成 zip 并发布到 GitHub Releases（标签 v<版本号>）。
+# 版本号没有变化的推送不会重复发布；也可以在 Actions 页面手动触发。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/server/version.go"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 同一时间只跑一个发布任务，避免两次推送同时创建同一个 release。
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          # 需要历史提交来对比版本号是否真的变了。
+          fetch-depth: 0
+
+      - name: 读取版本号
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^const Version = "\(.*\)"/\1/p' internal/server/version.go)
+          if [ -z "$VERSION" ]; then
+            echo "无法从 internal/server/version.go 读取版本号"
+            exit 1
+          fi
+          # 版本号会直接作为 release 标签，先确认格式是 1.2 或 1.2.3。
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+            echo "版本号格式不对：$VERSION（应为 1.2 或 1.2.3）"
+            exit 1
+          fi
+          # 手动触发时总是发布；push 时只有版本号真的变了才发布。
+          CHANGED=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHANGED=true
+          else
+            BEFORE="${{ github.event.before }}"
+            PREVIOUS=""
+            if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              PREVIOUS=$(git show "$BEFORE":internal/server/version.go 2>/dev/null | sed -n 's/^const Version = "\(.*\)"/\1/p' || true)
+            fi
+            if [ "$PREVIOUS" != "$VERSION" ]; then
+              CHANGED=true
+            fi
+            echo "上一次版本：${PREVIOUS:-（无）}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "版本号：$VERSION，是否发布：$CHANGED"
+
+      - name: 设置 Go
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: 静态检查
+        if: steps.version.outputs.changed == 'true'
+        shell: bash
+        run: GOOS=windows go vet ./internal/... ./cmd/...
+
+      - name: 编译 Windows x64
+        if: steps.version.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # 程序不依赖 CGO，在 Linux 上交叉编译出 Windows 程序。
+          # -s -w 去掉调试信息，文件更小；-trimpath 不记录构建机器的源码路径。
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -trimpath -ldflags '-s -w' -o dist/mdc-go.exe ./cmd/mdc-go
+          ls -lh dist/mdc-go.exe
+
+      - name: 打包 zip
+        if: steps.version.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAME="mdc-go-windows-amd64-${{ steps.version.outputs.version }}"
+          mkdir -p "dist/$NAME/docs"
+          cp dist/mdc-go.exe "dist/$NAME/"
+          cp README.md LICENSE "dist/$NAME/"
+          if [ -f docs/plugin-development.md ]; then
+            cp docs/plugin-development.md "dist/$NAME/docs/"
+          fi
+          # 在 dist 目录里打包，zip 内部就是 $NAME 这一层目录。
+          (cd dist && zip -r -q "$NAME.zip" "$NAME" && sha256sum "$NAME.zip" > "$NAME.zip.sha256")
+          cat "dist/$NAME.zip.sha256"
+
+      - name: 保存构建产物
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdc-go-windows-amd64
+          path: |
+            dist/mdc-go.exe
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: error
+
+      - name: 发布到 GitHub Releases
+        if: steps.version.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body: |
+            Windows x64 便携版（单文件程序，前端和内置插件已编译进程序）。
+
+            下载 `mdc-go-windows-amd64-${{ steps.version.outputs.version }}.zip` 解压后运行 `mdc-go.exe`，或直接下载单独的 `mdc-go.exe`。
+            `data` 和 `plugins` 目录会在第一次启动时自动生成在程序所在目录。
+            默认监听 `0.0.0.0:19208`，浏览器打开 `http://127.0.0.1:19208` 即可。
+
+            `ffprobe`（来自 ffmpeg）是可选的，装在 `PATH` 中即可识别视频真实分辨率。
+          files: |
+            dist/mdc-go.exe
+            dist/mdc-go-windows-amd64-${{ steps.version.outputs.version }}.zip
+            dist/mdc-go-windows-amd64-${{ steps.version.outputs.version }}.zip.sha256
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          generate_release_notes: true

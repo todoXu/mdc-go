@@ -30,6 +30,10 @@ docker compose up -d
 
 容器内的挂载路径就是页面中填写的监控目录和整理目录。例如把宿主机的 `/mnt/media` 挂载到容器的 `/media`，页面中就填写 `/media/...`。
 
+### Windows 便携版
+
+从 [Releases](https://github.com/todoXu/mdc-go/releases) 下载最新的 `mdc-go-windows-amd64-*.zip`，解压后运行 `mdc-go.exe`。前端和内置插件都已编译进程序，`data` 和 `plugins` 目录会在第一次启动时生成在程序所在目录，拷走这一个程序就能用。
+
 ### 从源码编译
 
 需要 Go 1.26 或更新版本。程序不依赖 CGO。
@@ -89,6 +93,15 @@ go test ./internal/server/ ./internal/provider/ -count=1
 ```
 
 开发时可以用 `-assets` 参数直接读取磁盘上的前端文件，修改后刷新页面即可生效，不需要重新编译。
+
+## 发布
+
+修改 `internal/server/version.go` 中的 `Version` 并推送到 `main` 分支后，GitHub Actions 会自动：
+
+- `windows-release`：编译 Windows x64 单文件程序，打包成 zip 并发布到 [Releases](https://github.com/todoXu/mdc-go/releases)，标签为 `v<版本号>`。
+- `docker-release`：构建 linux/amd64、linux/arm64 镜像并推送到 Docker Hub。
+
+版本号没有变化的推送不会重复发布。也可以在 Actions 页面手动触发这两个 workflow，手动触发时总是发布。
 
 ## 许可证
 
