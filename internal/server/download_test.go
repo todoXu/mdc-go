@@ -290,7 +290,22 @@ func TestPosterCropFullRatioLeavesSeamMargin(t *testing.T) {
 }
 
 func TestPosterCropAlignsJacketSeam(t *testing.T) {
-	// 封套：0..429 是背面，430 起是正面。比例算出的左边界 422 会把左侧 8px 背面带进海报。
+	// 封套：0..425 是背面，426 起是正面。比例算出的左边界 422 会带进 4px 背面。
+	picture := image.NewRGBA(image.Rect(0, 0, 800, 541))
+	draw.Draw(picture, image.Rect(0, 0, 426, 541), image.NewUniform(color.RGBA{40, 40, 44, 255}), image.Point{}, draw.Src)
+	draw.Draw(picture, image.Rect(426, 0, 800, 541), image.NewUniform(color.RGBA{120, 160, 90, 255}), image.Point{}, draw.Src)
+	rect, err := posterCropRectangle(context.Background(), picture, 800, 541, "Right", "Full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 接缝在 426，留 1px 余量从 427 开始，宽度取正面实际宽度 800-427。
+	if rect.X != 427 || rect.Width != 373 || rect.Height != 541 {
+		t.Fatalf("crop did not align to the jacket seam: %+v", rect)
+	}
+}
+
+func TestPosterCropKeepsRatioWhenSeamFar(t *testing.T) {
+	// 接缝离比例边界 8px，超出允许的小幅修正范围：保持比例裁剪，别跳过去切掉封面边框。
 	picture := image.NewRGBA(image.Rect(0, 0, 800, 541))
 	draw.Draw(picture, image.Rect(0, 0, 430, 541), image.NewUniform(color.RGBA{40, 40, 44, 255}), image.Point{}, draw.Src)
 	draw.Draw(picture, image.Rect(430, 0, 800, 541), image.NewUniform(color.RGBA{120, 160, 90, 255}), image.Point{}, draw.Src)
@@ -298,9 +313,27 @@ func TestPosterCropAlignsJacketSeam(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 接缝在 430，留 1px 余量从 431 开始，宽度取正面实际宽度 800-431。
-	if rect.X != 431 || rect.Width != 369 || rect.Height != 541 {
-		t.Fatalf("crop did not align to the jacket seam: %+v", rect)
+	if rect.X != 422 || rect.Width != 378 {
+		t.Fatalf("far seam should keep the ratio crop: %+v", rect)
+	}
+}
+
+func TestPosterCropPrefersNearestSeam(t *testing.T) {
+	// 背面上的一条文字边（414 列，强度 15）比真正的中缝（426 列，强度 13）更强，
+	// 但它离比例边界 422 有 8px，应该选更近的那条，而不是更强的。
+	picture := image.NewRGBA(image.Rect(0, 0, 800, 540))
+	fill := func(x0, x1 int, c color.RGBA) {
+		draw.Draw(picture, image.Rect(x0, 0, x1, 540), image.NewUniform(c), image.Point{}, draw.Src)
+	}
+	fill(0, 414, color.RGBA{100, 100, 100, 255})
+	fill(414, 426, color.RGBA{85, 85, 85, 255})
+	fill(426, 800, color.RGBA{72, 72, 72, 255})
+	rect, err := posterCropRectangle(context.Background(), picture, 800, 540, "Right", "Full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rect.X != 427 || rect.Width != 373 {
+		t.Fatalf("crop picked the wrong seam: %+v", rect)
 	}
 }
 

@@ -169,11 +169,14 @@ async function cropDialog(job, changed) {
   const posterProvider=job.provenance?.poster;
   const preferred=posterProvider ? posterProvider+(job.metadata?.poster_from_cover?':cover':':poster') : '';
   const defaultSource=sourceOptions.some(([key])=>key===preferred) ? preferred : (sourceOptions[localCount] || sourceOptions[0])?.[0];
-  const element=dialog('封面裁剪', `<div class="crop-source-row"><label>原图来源<select name="source">${sourceOptions.map(([key,label])=>`<option value="${h(key)}" ${key===defaultSource?'selected':''}>${h(label)}</option>`).join('')}</select></label><button class="button" type="button" data-upload>手动选择</button><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden></div><div class="record-crop-layout"><div><canvas class="record-crop-canvas" tabindex="0" aria-label="裁剪框，拖动调整位置，滚轮或加减键调整大小，方向键移动"></canvas><label class="crop-zoom">框大小 <input name="zoom" type="range" min="1" max="4" step="0.01" value="1"><output>1.00×</output><button type="button" class="button small" data-reset>重置</button></label><p class="muted">拖动裁剪框移动位置；滚轮或双指调整框大小。方向键移动，Shift 加速，+ / − 调整大小，Home 重置。1.00× 是当前比例的最大框，数值越大框越小。</p><p class="muted" data-crop-size></p></div><aside><fieldset><legend>裁剪方式</legend>${[['Full','纵向（完整海报尺寸）'],['Emby','纵向（Emby 海报尺寸）'],['Landscape','横向']].map(([key,label],i)=>`<label><input type="radio" name="aspect" value="${key}" ${i===0?'checked':''}> ${label}</label>`).join('')}</fieldset><fieldset><legend>添加水印</legend><label><input type="checkbox" name="subtitle" ${job.has_subtitle?'checked':''}> 字幕</label><label>类型<select name="mosaic">${[['','无'],['is_uncensored','无码'],['is_ltx_hack','LTX'],['is_lada_hack','LADA'],['is_jav_hack','JAV'],['is_other_hack','破解']].map(([key,label])=>`<option value="${key}" ${job.file_info?.mosaic===key?'selected':''}>${label}</option>`).join('')}</select></label><label>分辨率<select name="resolution">${[['','无'],['4K','4K'],['8K','8K']].map(([key,label])=>`<option value="${key}" ${job.file_info?.resolution===key?'selected':''}>${label}</option>`).join('')}</select></label></fieldset><fieldset><legend>处理选项</legend><label><input type="checkbox" name="replace_thumb"> 同时用原图替换缩略图（不裁剪）</label></fieldset></aside></div>`, '提交','lg');
+  const element=dialog('封面裁剪', `<div class="crop-source-row"><label>原图来源<select name="source">${sourceOptions.map(([key,label])=>`<option value="${h(key)}" ${key===defaultSource?'selected':''}>${h(label)}</option>`).join('')}</select></label><button class="button" type="button" data-upload>手动选择</button><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden></div><div class="record-crop-layout"><div><canvas class="record-crop-canvas" tabindex="0" aria-label="裁剪框，拖动调整位置，滚轮或加减键调整大小，方向键移动"></canvas><label class="crop-zoom">框大小 <input name="zoom" type="range" min="1" max="4" step="0.01" value="1"><output>1.00×</output><button type="button" class="button small" data-reset>重置</button></label><p class="muted">拖动裁剪框移动位置；滚轮或双指调整框大小。方向键移动，Shift 加速，+ / − 调整大小，Home 重置。1.00× 是当前比例的最大框，数值越大框越小。</p><p class="muted" data-crop-size></p></div><aside><fieldset class="crop-size-field"><legend>边界</legend><label class="crop-size-toggle"><input type="checkbox" name="manual_size"> 手动指定长度</label><label>长度（像素，裁剪框的水平宽度）<span class="crop-size-row"><button type="button" data-size-step="-1" aria-label="长度减 1 像素" disabled>−</button><input name="box_width" type="number" min="40" step="1" value="0" disabled><button type="button" data-size-step="1" aria-label="长度加 1 像素" disabled>+</button></span></label><small>自动：<b data-auto-width>0</b> px<button type="button" data-size-auto>恢复自动</button></small><p class="crop-left-hint">当前左边界：<b data-left-x>0</b> px</p></fieldset><fieldset><legend>裁剪方式</legend>${[['Full','纵向（完整海报尺寸）'],['Emby','纵向（Emby 海报尺寸）'],['Landscape','横向']].map(([key,label],i)=>`<label><input type="radio" name="aspect" value="${key}" ${i===0?'checked':''}> ${label}</label>`).join('')}</fieldset><fieldset><legend>添加水印</legend><label><input type="checkbox" name="subtitle" ${job.has_subtitle?'checked':''}> 字幕</label><label>类型<select name="mosaic">${[['','无'],['is_uncensored','无码'],['is_ltx_hack','LTX'],['is_lada_hack','LADA'],['is_jav_hack','JAV'],['is_other_hack','破解']].map(([key,label])=>`<option value="${key}" ${job.file_info?.mosaic===key?'selected':''}>${label}</option>`).join('')}</select></label><label>分辨率<select name="resolution">${[['','无'],['4K','4K'],['8K','8K']].map(([key,label])=>`<option value="${key}" ${job.file_info?.resolution===key?'selected':''}>${label}</option>`).join('')}</select></label></fieldset><fieldset><legend>处理选项</legend><label><input type="checkbox" name="replace_thumb"> 同时用原图替换缩略图（不裁剪）</label></fieldset></aside></div>`, '提交','lg');
   const canvas=element.querySelector('canvas'), ctx=canvas.getContext('2d'), zoom=element.querySelector('[name=zoom]'), select=element.querySelector('[name=source]'), submit=element.querySelector('[type=submit]'), error=element.querySelector('[role=alert]');
+  const sizeToggle=element.querySelector('[name=manual_size]'), sizeInput=element.querySelector('[name=box_width]'), autoWidthOut=element.querySelector('[data-auto-width]'), leftOut=element.querySelector('[data-left-x]'), sizeButtons=element.querySelectorAll('[data-size-step]');
   let image, body='', scale=1, x=0, y=0, frame, loading=0, cropMethod='Center', face={found:false,x:0,y:0};
   // 服务端按封套接缝算出的实际裁剪比例；切换裁剪方式后失效，回到固定比例。
   let serverFrame=null;
+  // 手动指定长度时的裁剪框：固定宽高，可整体拖动；为 null 时用比例框。
+  let manualBox=null;
   let disposed=false;
   element.addEventListener('close',()=>{disposed=true; image=null; body='';});
   function aspectRatio() {
@@ -201,8 +204,42 @@ async function cropDialog(job, changed) {
       y:Math.max(0,Math.min(image.height-height,nextY)),
     };
   }
+  // 当前比例下 scale=1 时的最大框宽，也就是「自动」的长度。
+  function maxWidth() {
+    const ratio=aspectRatio();
+    return Math.max(1,Math.floor(Math.min(image.width,image.height*ratio)));
+  }
+  function currentRect() { return manualBox ? {...manualBox} : geometry(); }
+  function syncSizeControls() {
+    const on=Boolean(manualBox);
+    sizeToggle.checked=on;
+    sizeInput.disabled=!on;
+    sizeButtons.forEach(button=>{button.disabled=!on;});
+    zoom.disabled=on;
+  }
+  // 进入手动模式：沿用当前框的位置和大小，右边界不动。
+  function enterManual() {
+    const base=geometry(); if (!base) return;
+    manualBox={x:base.x,y:base.y,width:base.width,height:base.height};
+    syncSizeControls(); draw();
+  }
+  function exitManual() { manualBox=null; syncSizeControls(); reset(); }
+  // 只改长度：右边界保持不动，从左边收放。
+  function setManualWidth(value) {
+    if (!image) return;
+    if (!manualBox) enterManual();
+    const right=manualBox.x+manualBox.width, width=Math.max(40,Math.min(image.width,Math.round(value)));
+    manualBox.width=width;
+    manualBox.x=Math.max(0,Math.min(image.width-width,right-width));
+    draw();
+  }
+  function setManualSize(on) {
+    if (!on) exitManual();
+    else if (!manualBox) enterManual();
+    else { syncSizeControls(); draw(); }
+  }
   function draw() {
-    const rect=geometry(); if (!rect) return;
+    const rect=currentRect(); if (!rect) return;
     const factor=Math.min(1,1000/image.width,720/image.height);
     canvas.width=Math.round(image.width*factor); canvas.height=Math.round(image.height*factor);
     ctx.drawImage(image,0,0,canvas.width,canvas.height);
@@ -211,12 +248,20 @@ async function cropDialog(job, changed) {
     ctx.drawImage(image,rect.x,rect.y,rect.width,rect.height,r.x,r.y,r.w,r.h);
     ctx.strokeStyle='#ff2d2d'; ctx.lineWidth=3; ctx.strokeRect(r.x,r.y,r.w,r.h);
     frame=rect;
-    element.querySelector('output').textContent=scale.toFixed(2)+'×';
+    syncSizeControls();
+    element.querySelector('output').textContent=manualBox?'手动':scale.toFixed(2)+'×';
+    if (document.activeElement!==sizeInput) sizeInput.value=rect.width;
+    leftOut.textContent=rect.x;
+    autoWidthOut.textContent=maxWidth();
     const method={None:'不裁剪',Right:'右侧',Center:'中心',Face:face.found?'人脸':'人脸（未检测到，中心）'}[cropMethod] || cropMethod;
-    element.querySelector('[data-crop-size]').textContent=`裁剪范围：${rect.width} × ${rect.height} 像素 · 设置方式：${method}`;
+    const ratio=(rect.width/rect.height).toFixed(3);
+    element.querySelector('[data-crop-size]').innerHTML=manualBox
+      ? `裁剪范围：${rect.width} × ${rect.height} 像素 · <span class="crop-manual">手动长度（左边界 ${rect.x}，比例 ${ratio}）</span>`
+      : `裁剪范围：${rect.width} × ${rect.height} 像素 · 设置方式：${method}`;
   }
   function reset() {
     scale=1; zoom.value='1';
+    manualBox=null; syncSizeControls();
     if (image) {
       const ratio=aspectRatio(), width=Math.max(1,Math.floor(Math.min(image.width,image.height*ratio))), height=width/ratio;
       const position=suggestedPosition(width,height); x=position.x; y=position.y;
@@ -261,10 +306,15 @@ async function cropDialog(job, changed) {
     } catch (failure) { error.textContent=failure.message; }
   };
   function setZoom(value) {
+    if (manualBox) return;
     const before=geometry(); scale=Math.max(1,Math.min(4,value)); zoom.value=String(scale);
     const after=geometry(); if (before && after) { x=before.x+(before.width-after.width)/2; y=before.y+(before.height-after.height)/2; } draw();
   }
   zoom.oninput=()=>setZoom(Number(zoom.value));
+  sizeToggle.onchange=()=>setManualSize(sizeToggle.checked);
+  sizeInput.oninput=()=>{const value=Number(sizeInput.value); if (Number.isFinite(value)) setManualWidth(value);};
+  sizeButtons.forEach(button=>{button.onclick=()=>setManualWidth((frame?frame.width:0)+Number(button.dataset.sizeStep));});
+  element.querySelector('[data-size-auto]').onclick=()=>setManualSize(false);
   element.querySelector('[data-reset]').onclick=reset;
   element.querySelectorAll('[name=aspect]').forEach(radio=>radio.onchange=()=>{serverFrame=null;reset();});
   const pointers=new Map(); let drag;
@@ -272,17 +322,33 @@ async function cropDialog(job, changed) {
   canvas.onpointermove=event=>{
     if (!pointers.has(event.pointerId) || !image) return;
     const previous=pointers.get(event.pointerId), others=[...pointers.entries()].filter(([id])=>id!==event.pointerId);
-    if (others.length) { const other=others[0][1], old=Math.hypot(previous.x-other.x,previous.y-other.y), next=Math.hypot(event.clientX-other.x,event.clientY-other.y); if (old>0) setZoom(scale*next/old); }
-    else if (drag) { const bounds=canvas.getBoundingClientRect(), factor=Math.min(bounds.width/image.width,bounds.height/image.height);x+=(event.clientX-drag.x)/factor;y+=(event.clientY-drag.y)/factor;draw(); }
+    if (others.length && !manualBox) { const other=others[0][1], old=Math.hypot(previous.x-other.x,previous.y-other.y), next=Math.hypot(event.clientX-other.x,event.clientY-other.y); if (old>0) setZoom(scale*next/old); }
+    else if (drag) {
+      const bounds=canvas.getBoundingClientRect(), factor=Math.min(bounds.width/image.width,bounds.height/image.height);
+      const dx=(event.clientX-drag.x)/factor, dy=(event.clientY-drag.y)/factor;
+      if (manualBox) {
+        // 手动模式：整个框一起拖动
+        manualBox.x=Math.round(Math.max(0,Math.min(image.width-manualBox.width,manualBox.x+dx)));
+        manualBox.y=Math.round(Math.max(0,Math.min(image.height-manualBox.height,manualBox.y+dy)));
+      } else { x+=dx; y+=dy; }
+      draw();
+    }
     pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});drag={x:event.clientX,y:event.clientY};
   };
   canvas.onpointerup=canvas.onpointercancel=event=>{pointers.delete(event.pointerId);drag=null;};
-  canvas.addEventListener('wheel',event=>{event.preventDefault();setZoom(scale*(event.deltaY<0?1.08:1/1.08));},{passive:false});
+  canvas.addEventListener('wheel',event=>{event.preventDefault();if (!manualBox) setZoom(scale*(event.deltaY<0?1.08:1/1.08));},{passive:false});
   canvas.onkeydown=event=>{
     const step=event.shiftKey?20:2;
     if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','+','=','-','Home'].includes(event.key)) return;
     event.preventDefault();
-    if (event.key==='Home') reset(); else if (event.key==='+' || event.key==='=') setZoom(scale*1.1); else if (event.key==='-') setZoom(scale/1.1);
+    if (event.key==='Home') reset();
+    else if (manualBox) {
+      const dx=event.key==='ArrowLeft'?-step:event.key==='ArrowRight'?step:0, dy=event.key==='ArrowUp'?-step:event.key==='ArrowDown'?step:0;
+      manualBox.x=Math.round(Math.max(0,Math.min(image.width-manualBox.width,manualBox.x+dx)));
+      manualBox.y=Math.round(Math.max(0,Math.min(image.height-manualBox.height,manualBox.y+dy)));
+      draw();
+    }
+    else if (event.key==='+' || event.key==='=') setZoom(scale*1.1); else if (event.key==='-') setZoom(scale/1.1);
     else { if (event.key==='ArrowLeft') x-=step; if (event.key==='ArrowRight') x+=step; if (event.key==='ArrowUp') y-=step; if (event.key==='ArrowDown') y+=step;draw(); }
   };
   onSubmit(element,async()=>{

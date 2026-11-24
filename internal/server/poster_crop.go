@@ -167,30 +167,39 @@ func jacketSeamColumn(src image.Image, x, width, height int) (int, bool) {
 		sort.Float64s(values)
 		diffs[c-start] = values[len(values)/2]
 	}
-	peak, peakAt := 0.0, -1
+	// 先筛出局部极大值（接缝是单独一条边，不是缓慢过渡），再按「强度 / 距离」挑选：
+	// 离比例边界越远，越可能是画面里的文字边而不是封套中缝。只看最强的一条会在这种
+	// 封面上选错——背面的文字边偶尔比真正的中缝还强一点。
+	baseline := append([]float64(nil), diffs...)
+	sort.Float64s(baseline)
+	floor := baseline[len(baseline)/2] * 2.5
+	best, bestScore, peak := -1, 0.0, 0.0
 	for i, d := range diffs {
-		if d > peak {
-			peak, peakAt = d, start+i
+		if d < 10 || d < floor {
+			continue
+		}
+		if i > 0 && d < diffs[i-1] {
+			continue
+		}
+		if i+1 < len(diffs) && d < diffs[i+1] {
+			continue
+		}
+		if score := d / (1 + math.Abs(float64(start+i-x))); score > bestScore {
+			best, bestScore, peak = start+i, score, d
 		}
 	}
-	others := make([]float64, 0, len(diffs))
-	for _, d := range diffs {
-		if d != peak {
-			others = append(others, d)
-		}
-	}
-	sort.Float64s(others)
-	// 峰值要明显高于窗口里的其它列，避免把画面里偶然的竖线当成中缝。
-	if peak < 12 || peak < max(12.0, 2.5*others[len(others)/2]) {
+	if best < 0 {
 		return 0, false
 	}
 	// 中缝和书脊常有好几像素宽，取这条接缝之后的第一列作为正面起点（留 1px 余量）。
-	last := peakAt
+	last := best
 	for last < end && diffs[last+1-start] >= peak*0.5 {
 		last++
 	}
 	seam := last + 1
-	if seam < 1 || seam >= width-1 {
+	// 比例是先验：接缝只接受小幅修正。离比例边界太远的边更可能是画面里的边框或文字边
+	// （封套正面自带的白/金内框、背面的价签等），这时宁可保持比例裁剪，也不要跳过去。
+	if seam < 1 || seam >= width-1 || max(seam, x)-min(seam, x) > max(3, width/150) {
 		return 0, false
 	}
 	return seam, true

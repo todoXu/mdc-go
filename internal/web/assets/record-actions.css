@@ -100,3 +100,20 @@
   .crop-source-row { flex-wrap: wrap; }
   .crop-source-row > label { flex-basis: 100%; flex-wrap: wrap; }
 }
+
+/* 封面裁剪：手动指定长度 */
+.record-editor fieldset.crop-size-field > label.crop-size-toggle { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; cursor: pointer; }
+.crop-size-toggle input { margin: 0; }
+.crop-size-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; gap: 6px; margin-top: 8px; }
+.crop-size-row button { height: 34px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--text); font-size: 16px; cursor: pointer; }
+.crop-size-row button:hover:enabled { background: #f4f7fd; }
+.crop-size-row button:disabled { opacity: .45; cursor: default; }
+.crop-size-row input { width: 100%; text-align: center; font-variant-numeric: tabular-nums; }
+.crop-size-row input:disabled { background: #f4f6fa; color: #98a1b0; }
+.record-editor fieldset.crop-size-field small { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+.record-editor fieldset.crop-size-field small b { color: var(--blue); font-variant-numeric: tabular-nums; }
+.record-editor fieldset.crop-size-field small button { margin-left: auto; border: 0; background: none; padding: 0; color: var(--blue); font-size: 12px; cursor: pointer; }
+.record-editor fieldset.crop-size-field small button:hover { text-decoration: underline; }
+.crop-left-hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.crop-left-hint b { color: var(--text); font-variant-numeric: tabular-nums; }
+.crop-manual { color: #b45309; }
