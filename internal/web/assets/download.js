@@ -29,9 +29,9 @@ export function renderDownloadFields(config) {
     <div class="download-strategies">${strategies.map(([value, title, desc]) => `<label class="download-strategy"><input type="radio" name="thumb-download-strategy" value="${value}" ${selectedStrategy === value ? 'checked' : ''}><span><b>${title}</b><small>${desc}</small></span></label>`).join('')}</div>
     ${section('海报裁剪', '独立海报不达标时，可从选中的缩略图裁剪。')}
     ${cropTypes.map(([key, title, desc]) => select(key, title, desc, cropMethods, config)).join('')}
-    ${select('crop_aspect', '裁剪比例', '选择完整海报或 Emby 常用比例。', [['Full', '完整海报 (2.12:3)'], ['Emby', 'Emby 比例 (2:3)']], config)}
+    ${select('crop_aspect', '裁剪比例', '选择完整海报或 Emby 常用比例。', [['Full', '完整海报 (2.1:3)'], ['Emby', 'Emby 比例 (2:3)']], config)}
     ${checkbox('crop_poster', '独立海报裁剪', '对独立海报进行居中裁剪。', config)}
-    ${checkbox('crop_when_poster_low_res', '优先选择裁剪结果', '比较独立海报与缩略图裁剪结果的分辨率。', config)}
+    ${checkbox('crop_when_poster_low_res', '优先选择裁剪结果', '独立海报不足缩略图高度的 90% 时，才比较裁剪结果的分辨率。', config)}
   </div>`;
 }
 

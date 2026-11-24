@@ -171,7 +171,7 @@ func TestPosterCropGeometryAndFaceFallback(t *testing.T) {
 		}
 	}
 	full, err := cropPoster(context.Background(), input, "Right", "Full")
-	if err != nil || full.width != 424 {
+	if err != nil || full.width != 420 {
 		t.Fatal("wrong Full aspect", full.width, err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -267,6 +267,81 @@ func TestPosterCropCandidateFollowsConfiguredMethod(t *testing.T) {
 	}
 	if rect.FaceFound || rect.X != 83 {
 		t.Fatalf("no-face fallback: %+v", rect)
+	}
+}
+
+func TestPosterCropFullRatioLeavesSeamMargin(t *testing.T) {
+	input, err := inspectImage(downloadTestPNG(t, 800, 541))
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := decodeWatermarkImage(input.data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rect, err := posterCropRectangle(t.Context(), src, 800, 541, "Right", "Full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 没有可识别的封套接缝时退回 0.7 比例：0.7 × 541 向下取整是 378，左边界 422。
+	if rect.X != 422 || rect.Width != 378 || rect.Height != 541 {
+		t.Fatalf("Full aspect should keep a 1px margin: %+v", rect)
+	}
+}
+
+func TestPosterCropAlignsJacketSeam(t *testing.T) {
+	// 封套：0..429 是背面，430 起是正面。比例算出的左边界 422 会把左侧 8px 背面带进海报。
+	picture := image.NewRGBA(image.Rect(0, 0, 800, 541))
+	draw.Draw(picture, image.Rect(0, 0, 430, 541), image.NewUniform(color.RGBA{40, 40, 44, 255}), image.Point{}, draw.Src)
+	draw.Draw(picture, image.Rect(430, 0, 800, 541), image.NewUniform(color.RGBA{120, 160, 90, 255}), image.Point{}, draw.Src)
+	rect, err := posterCropRectangle(context.Background(), picture, 800, 541, "Right", "Full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 接缝在 430，留 1px 余量从 431 开始，宽度取正面实际宽度 800-431。
+	if rect.X != 431 || rect.Width != 369 || rect.Height != 541 {
+		t.Fatalf("crop did not align to the jacket seam: %+v", rect)
+	}
+}
+
+func TestPosterCropIgnoresSeamOnWideThumbnail(t *testing.T) {
+	// 16:9 的剧照不是封套，画面里就算有竖直分界线也不应该移动裁剪框。
+	picture := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	draw.Draw(picture, image.Rect(0, 0, 1200, 1080), image.NewUniform(color.RGBA{30, 30, 30, 255}), image.Point{}, draw.Src)
+	draw.Draw(picture, image.Rect(1200, 0, 1920, 1080), image.NewUniform(color.RGBA{200, 200, 200, 255}), image.Point{}, draw.Src)
+	rect, err := posterCropRectangle(context.Background(), picture, 1920, 1080, "Right", "Full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rect.X != 1920-756 || rect.Width != 756 {
+		t.Fatalf("wide thumbnail should not be treated as a jacket: %+v", rect)
+	}
+}
+
+func TestPosterSelectionKeepsTallPoster(t *testing.T) {
+	s := configureScrapeServer(t)
+	meta := provider.Metadata{Provider: "First", Number: "ABP-123", Title: "Test", SourceURL: "https://example.test/film", Cover: "https://example.test/cover.png", Poster: "https://example.test/poster.png"}
+	pictures := map[string][]byte{meta.Cover: downloadTestPNG(t, 1800, 1200), meta.Poster: downloadTestPNG(t, 900, 1200)}
+	installDownloadSource(t, s, "First", meta, pictures)
+	s.priorities.ByFields["cover"] = []string{"First"}
+	s.priorities.ByFields["poster"] = []string{"First"}
+	settings, _ := s.scrapeSettings()
+	settings.Download.Poster = true
+	settings.Download.Thumb = false
+	settings.Download.Fanart = false
+	settings.Download.Aspect = "Full"
+	settings.Download.CropRegular = "Right"
+	// 候选海报和封面一样高（1200），达到封面的 90%，不应该再裁封面。
+	settings.Download.PreferCrop = true
+	provenance := map[string]string{"cover": "First", "poster": "First"}
+	sources := map[string]provider.Metadata{"First": meta}
+	writes, _, err := s.prepareScrapeImages(context.Background(), "ABP-123.mp4", "video", &meta, provenance, sources, settings, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(writes["video-poster.png"]))
+	if err != nil || config.Width != 900 || config.Height != 1200 {
+		t.Fatal("tall poster should not be replaced by a cover crop", config, err)
 	}
 }
 

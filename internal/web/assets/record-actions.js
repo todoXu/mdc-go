@@ -172,11 +172,14 @@ async function cropDialog(job, changed) {
   const element=dialog('封面裁剪', `<div class="crop-source-row"><label>原图来源<select name="source">${sourceOptions.map(([key,label])=>`<option value="${h(key)}" ${key===defaultSource?'selected':''}>${h(label)}</option>`).join('')}</select></label><button class="button" type="button" data-upload>手动选择</button><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden></div><div class="record-crop-layout"><div><canvas class="record-crop-canvas" tabindex="0" aria-label="裁剪框，拖动调整位置，滚轮或加减键调整大小，方向键移动"></canvas><label class="crop-zoom">框大小 <input name="zoom" type="range" min="1" max="4" step="0.01" value="1"><output>1.00×</output><button type="button" class="button small" data-reset>重置</button></label><p class="muted">拖动裁剪框移动位置；滚轮或双指调整框大小。方向键移动，Shift 加速，+ / − 调整大小，Home 重置。1.00× 是当前比例的最大框，数值越大框越小。</p><p class="muted" data-crop-size></p></div><aside><fieldset><legend>裁剪方式</legend>${[['Full','纵向（完整海报尺寸）'],['Emby','纵向（Emby 海报尺寸）'],['Landscape','横向']].map(([key,label],i)=>`<label><input type="radio" name="aspect" value="${key}" ${i===0?'checked':''}> ${label}</label>`).join('')}</fieldset><fieldset><legend>添加水印</legend><label><input type="checkbox" name="subtitle" ${job.has_subtitle?'checked':''}> 字幕</label><label>类型<select name="mosaic">${[['','无'],['is_uncensored','无码'],['is_ltx_hack','LTX'],['is_lada_hack','LADA'],['is_jav_hack','JAV'],['is_other_hack','破解']].map(([key,label])=>`<option value="${key}" ${job.file_info?.mosaic===key?'selected':''}>${label}</option>`).join('')}</select></label><label>分辨率<select name="resolution">${[['','无'],['4K','4K'],['8K','8K']].map(([key,label])=>`<option value="${key}" ${job.file_info?.resolution===key?'selected':''}>${label}</option>`).join('')}</select></label></fieldset><fieldset><legend>处理选项</legend><label><input type="checkbox" name="replace_thumb"> 同时用原图替换缩略图（不裁剪）</label></fieldset></aside></div>`, '提交','lg');
   const canvas=element.querySelector('canvas'), ctx=canvas.getContext('2d'), zoom=element.querySelector('[name=zoom]'), select=element.querySelector('[name=source]'), submit=element.querySelector('[type=submit]'), error=element.querySelector('[role=alert]');
   let image, body='', scale=1, x=0, y=0, frame, loading=0, cropMethod='Center', face={found:false,x:0,y:0};
+  // 服务端按封套接缝算出的实际裁剪比例；切换裁剪方式后失效，回到固定比例。
+  let serverFrame=null;
   let disposed=false;
   element.addEventListener('close',()=>{disposed=true; image=null; body='';});
   function aspectRatio() {
     const aspect=element.querySelector('[name=aspect]:checked').value;
-    return aspect==='Full'?2.12/3:aspect==='Emby'?2/3:16/9;
+    if (serverFrame && serverFrame.aspect===aspect) return serverFrame.ratio;
+    return aspect==='Full'?0.7:aspect==='Emby'?2/3:16/9;
   }
   function geometry() {
     if (!image) return null;
@@ -238,6 +241,7 @@ async function cropDialog(job, changed) {
       face={found:Boolean(result.face_found),x:Number(result.face_x)||0,y:Number(result.face_y)||0};
       const aspect=element.querySelector(`[name=aspect][value="${result.crop_aspect}"]`);
       if (aspect) aspect.checked=true;
+      serverFrame=result.crop_width>0 && result.crop_height>0 ? {aspect:result.crop_aspect,ratio:result.crop_width/result.crop_height} : null;
       await loadImage(result.body_base64,result.content_type); error.textContent='';
     } catch (failure) { if (version===loading && !disposed) error.textContent=failure.message; }
   }
@@ -262,7 +266,7 @@ async function cropDialog(job, changed) {
   }
   zoom.oninput=()=>setZoom(Number(zoom.value));
   element.querySelector('[data-reset]').onclick=reset;
-  element.querySelectorAll('[name=aspect]').forEach(radio=>radio.onchange=reset);
+  element.querySelectorAll('[name=aspect]').forEach(radio=>radio.onchange=()=>{serverFrame=null;reset();});
   const pointers=new Map(); let drag;
   canvas.onpointerdown=event=>{canvas.focus();canvas.setPointerCapture(event.pointerId);pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});drag={x:event.clientX,y:event.clientY};};
   canvas.onpointermove=event=>{

@@ -259,7 +259,8 @@ func (s *Server) prepareScrapeImages(ctx context.Context, path, base string, met
 		if posterErr != nil && !needCover {
 			cover, coverErr = selectImage("cover", settings.Download.Strategy == "Quality")
 		}
-		if cover.data != nil && (posterErr != nil || settings.Download.PreferCrop) {
+		// 候选海报已经和封面差不多高时不再裁封面，直接用候选（见 shouldCropPoster）。
+		if cover.data != nil && (posterErr != nil || (settings.Download.PreferCrop && shouldCropPoster(poster, cover))) {
 			cropped, err := cropPoster(ctx, cover, posterCropMethod(meta.Number, path, settings), settings.Download.Aspect)
 			if err != nil {
 				return nil, warnings, err

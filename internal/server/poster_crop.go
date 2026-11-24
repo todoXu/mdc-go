@@ -11,6 +11,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 
@@ -129,6 +130,72 @@ type posterCropRect struct {
 	FaceFound           bool
 }
 
+// jacketSeamColumn 在缩略图左边界附近寻找封套的接缝，返回正面内容的第一列。
+// DMM 的封面常是 800×538 的封套扫描图：左边背面、中间书脊、右边正面。按比例算出的
+// 左边界会压在这条中缝上——比例窄了带进背面的黑边，宽了切掉正面左边的标题。
+// 只在封套比例（宽高比 1.3～1.65）的源图上找，普通 16:9 剧照不会命中。
+func jacketSeamColumn(src image.Image, x, width, height int) (int, bool) {
+	if width < 64 || height < 64 {
+		return 0, false
+	}
+	if ratio := float64(width) / float64(height); ratio < 1.3 || ratio > 1.65 {
+		return 0, false
+	}
+	// 接缝可能落在比例边界左右各 1% 的范围内，两边都要找。
+	shift := max(2, width/100)
+	start := max(1, x-shift)
+	end := min(width-1, x+shift)
+	if start > end {
+		return 0, false
+	}
+	origin := src.Bounds().Min
+	// 颜色差（R、G、B 三个通道的平均差）：只看亮度会漏掉红蓝这类亮度接近的接缝。
+	difference := func(c, y int) float64 {
+		r1, g1, b1, _ := src.At(origin.X+c, origin.Y+y).RGBA()
+		r2, g2, b2, _ := src.At(origin.X+c-1, origin.Y+y).RGBA()
+		return (math.Abs(float64(r1)-float64(r2)) + math.Abs(float64(g1)-float64(g2)) + math.Abs(float64(b1)-float64(b2))) / 3 / 257
+	}
+	// 逐列取每行颜色差的中位数：接缝贯穿整幅图，中位数可以排除只在局部出现的竖线。
+	step := max(1, height/200)
+	diffs := make([]float64, end-start+1)
+	values := make([]float64, 0, height/step+1)
+	for c := start; c <= end; c++ {
+		values = values[:0]
+		for y := 0; y < height; y += step {
+			values = append(values, difference(c, y))
+		}
+		sort.Float64s(values)
+		diffs[c-start] = values[len(values)/2]
+	}
+	peak, peakAt := 0.0, -1
+	for i, d := range diffs {
+		if d > peak {
+			peak, peakAt = d, start+i
+		}
+	}
+	others := make([]float64, 0, len(diffs))
+	for _, d := range diffs {
+		if d != peak {
+			others = append(others, d)
+		}
+	}
+	sort.Float64s(others)
+	// 峰值要明显高于窗口里的其它列，避免把画面里偶然的竖线当成中缝。
+	if peak < 12 || peak < max(12.0, 2.5*others[len(others)/2]) {
+		return 0, false
+	}
+	// 中缝和书脊常有好几像素宽，取这条接缝之后的第一列作为正面起点（留 1px 余量）。
+	last := peakAt
+	for last < end && diffs[last+1-start] >= peak*0.5 {
+		last++
+	}
+	seam := last + 1
+	if seam < 1 || seam >= width-1 {
+		return 0, false
+	}
+	return seam, true
+}
+
 func posterCropRectangle(ctx context.Context, src image.Image, width, height int, method, aspect string) (posterCropRect, error) {
 	if method == "" {
 		method = "Right"
@@ -139,7 +206,9 @@ func posterCropRectangle(ctx context.Context, src image.Image, width, height int
 	if err := ctx.Err(); err != nil {
 		return posterCropRect{}, err
 	}
-	ratio := 2.12 / 3.0
+	// 完整海报取 0.7（2.1:3），宽度向下取整：封套约 800×538，正面约 379 宽，0.7 比
+	// 2.12/3 窄一点，按比例裁时不容易把中缝带进海报。真正贴身的是下面的接缝对齐。
+	ratio := 0.7
 	if aspect == "Emby" {
 		ratio = 2.0 / 3.0
 	} else if aspect != "" && aspect != "Full" {
@@ -148,14 +217,20 @@ func posterCropRectangle(ctx context.Context, src image.Image, width, height int
 	w, h := width, height
 	cw, ch := w, h
 	if float64(w)/float64(h) > ratio {
-		cw = max(1, int(math.Round(float64(h)*ratio)))
+		cw = max(1, int(float64(h)*ratio))
 	} else {
-		ch = max(1, int(math.Round(float64(w)/ratio)))
+		ch = max(1, int(float64(w)/ratio))
 	}
 	x, y := (w-cw)/2, (h-ch)/2
 	rect := posterCropRect{X: x, Y: y, Width: cw, Height: ch}
 	if method == "Right" {
 		rect.X = w - cw
+		// 封面是左右两面的封套时，比例算出的左边界会压在中缝上：窄了会带进背面的黑边，
+		// 宽了会切掉正面左边的标题。检测到接缝就直接对齐，宽取正面实际宽度。
+		if seam, ok := jacketSeamColumn(src, rect.X, w, h); ok {
+			traceScrape(ctx, "海报裁剪", fmt.Sprintf("左边界对齐封套接缝：%d → %d", rect.X, seam))
+			rect.X, rect.Width = seam, w-seam
+		}
 	}
 	if method == "Face" {
 		face, found, err := detectPosterFace(ctx, src)
@@ -172,6 +247,22 @@ func posterCropRectangle(ctx context.Context, src image.Image, width, height int
 		}
 	}
 	return rect, nil
+}
+
+// posterCropSkipRatio 候选海报高度达到封面的这个比例时就不再裁封面：裁剪有错位风险，
+// 候选已经和封面差不多高时裁了也没多少收益。0.9 取自 Amane 的默认值。
+const posterCropSkipRatio = 0.9
+
+// shouldCropPoster 判断是否值得用封面裁剪来生成海报：没有候选海报，或候选比封面明显矮时才裁。
+// 候选海报够高（≥ 封面的 90%）时直接用候选，避免把一张正经的竖版海报换成封套裁片。
+func shouldCropPoster(poster, cover downloadedImage) bool {
+	if cover.data == nil || cover.width <= 0 || cover.height <= 0 {
+		return false
+	}
+	if poster.data == nil || poster.width <= 0 || poster.height <= 0 {
+		return true
+	}
+	return float64(poster.height) < posterCropSkipRatio*float64(cover.height)
 }
 
 func finalizeScrapeImage(ctx context.Context, input downloadedImage, kind string, flags filenameFlags, settings scrapeSettings) (downloadedImage, error) {

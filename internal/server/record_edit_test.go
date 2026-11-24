@@ -178,7 +178,7 @@ func TestRecordManualCropBoundsAndReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if source.Code != 200 || err != nil || config.Width != 300 || result.Method != "Right" || result.Aspect != "Full" || result.X != 159 || result.Width != 141 || result.FaceFound {
+	if source.Code != 200 || err != nil || config.Width != 300 || result.Method != "Right" || result.Aspect != "Full" || result.X != 160 || result.Width != 140 || result.FaceFound {
 		t.Fatal(source.Body.String())
 	}
 	if response := call(s, "POST", "/api/scrape/jobs/edit/crop-source", `{"source":"local:../config"}`); response.Code != 400 {
