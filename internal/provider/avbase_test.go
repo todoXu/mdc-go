@@ -10,18 +10,26 @@ import (
 
 const avbaseFixture = `<html><head><link rel="canonical" href="https://www.avbase.net/works/example:TEST-123"></head><body><div role="tabpanel"><h1>Example title</h1><img src="https://example.com/pl.jpg"><dl><div><dt>発売日</dt><dd>2026/11/27</dd></div><div><dt>収録分数</dt><dd>120</dd></div><div><dt>メーカー</dt><dd>Example studio</dd></div><div><dt>レーベル</dt><dd>Example publisher</dd></div><div><dt>シリーズ</dt><dd>Example series</dd></div><div><dt>監督</dt><dd>Example director</dd></div></dl><a href="https://pics.dmm.co.jp/example-1.jpg">sample</a></div><section><h2>紹介文</h2><p>Example outline text.</p></section><section><div><h2>出演者・メモ</h2></div><a href="/talents/one">Actor One</a><a href="/talents/two">Actor Two</a></section><section><div><h2>タグ・説明文</h2></div><a href="/tags/a">Tag A</a></section><section><h2>関連作品</h2><a href="/talents/other">Unrelated actor</a></section></body></html>`
 
-func TestAvbaseDMMPosterUsesExactProductPath(t *testing.T) {
-	for _, cover := range []string{
-		"https://awsimgsrc.dmm.com/dig/mono/movie/cawb068/cawb068pl.jpg",
-		"https://pics.dmm.co.jp/dig/mono/movie/cawb068/cawb068pl.jpg?cache=1",
-		"https://pics.dmm.co.jp/digital/video/jur00888/jur00888pl.jpg",
-		"https://awsimgsrc.dmm.com/digital/video/cawb00068/cawb00068pl.jpg",
-		"https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/ipzz00034/ipzz00034pl.jpg",
-		"https://example.com/pl.jpg",
+func TestAvbaseDMMPosterUsesPicsDigPath(t *testing.T) {
+	for _, scenario := range []struct {
+		cover, poster, publishNumber string
+	}{
+		// 竖版海报在 pics_dig 下；mono/movie/adult 去掉 adult 段。
+		{"https://pics.dmm.co.jp/mono/movie/adult/h_1712kbr033/h_1712kbr033pl.jpg", "https://awsimgsrc.dmm.co.jp/pics_dig/mono/movie/h_1712kbr033/h_1712kbr033ps.jpg", "h_1712kbr033"},
+		// 已经在 pics_dig 上的封面直接换 ps，不重复加前缀。
+		{"https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/ipzz00034/ipzz00034pl.jpg", "https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/ipzz00034/ipzz00034ps.jpg", "ipzz00034"},
+		// digital/video 保留原路径（零填充番号也一样）。
+		{"https://pics.dmm.co.jp/digital/video/jur00888/jur00888pl.jpg", "https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/jur00888/jur00888ps.jpg", "jur00888"},
+		{"https://awsimgsrc.dmm.com/digital/video/cawb00068/cawb00068pl.jpg", "https://awsimgsrc.dmm.co.jp/pics_dig/digital/video/cawb00068/cawb00068ps.jpg", "cawb00068"},
+		// dig/mono/movie 是另一种路径，保留 dig 前缀，不套 pics_dig。
+		{"https://awsimgsrc.dmm.com/dig/mono/movie/cawb068/cawb068pl.jpg", "https://awsimgsrc.dmm.co.jp/dig/mono/movie/cawb068/cawb068ps.jpg", "cawb068"},
+		{"https://pics.dmm.co.jp/dig/mono/movie/cawb068/cawb068pl.jpg?cache=1", "https://awsimgsrc.dmm.co.jp/dig/mono/movie/cawb068/cawb068ps.jpg", "cawb068"},
+		// 非 DMM 的封面没有对应的竖版海报。
+		{"https://example.com/pl.jpg", "", ""},
 	} {
-		t.Run(cover, func(t *testing.T) {
+		t.Run(scenario.cover, func(t *testing.T) {
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte(strings.ReplaceAll(avbaseFixture, "https://example.com/pl.jpg", cover)))
+				w.Write([]byte(strings.ReplaceAll(avbaseFixture, "https://example.com/pl.jpg", scenario.cover)))
 			}))
 			defer upstream.Close()
 			registry, err := New(t.TempDir())
@@ -36,24 +44,7 @@ func TestAvbaseDMMPosterUsesExactProductPath(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := "https://awsimgsrc.dmm.com/dig/mono/movie/cawb068/cawb068ps.jpg"
-			wantPublishNumber := "cawb068"
-			if strings.Contains(cover, "cawb00068") {
-				wantPublishNumber = "cawb00068"
-			}
-			if strings.Contains(cover, "ipzz00034") {
-				want = ""
-				wantPublishNumber = "ipzz00034"
-			}
-			if strings.Contains(cover, "jur00888") {
-				want = "https://awsimgsrc.dmm.com/dig/mono/movie/jur888/jur888ps.jpg"
-				wantPublishNumber = "jur00888"
-			}
-			if strings.Contains(cover, "example.com") {
-				want = ""
-				wantPublishNumber = ""
-			}
-			if meta.Poster != want || meta.Cover != cover || meta.PublishNumber != wantPublishNumber {
+			if meta.Poster != scenario.poster || meta.Cover != scenario.cover || meta.PublishNumber != scenario.publishNumber {
 				t.Fatalf("unexpected URLs: %+v", meta)
 			}
 		})

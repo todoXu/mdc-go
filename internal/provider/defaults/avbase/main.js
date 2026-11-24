@@ -37,18 +37,17 @@ function publishNumberFromCover(address) {
   return match ? match[1].toLowerCase() : "";
 }
 function posterFromCover(address) {
-  // Digital covers use a zero-padded content ID; physical posters use a
-  // separate directory and a three-digit-minimum product number.
-  var match = address.match(/^https?:\/\/(?:pics\.dmm\.co\.jp|awsimgsrc\.dmm\.com)\/(.+)pl\.jpg(?:[?#].*)?$/i);
+  // 竖版海报是和封面分开存放的单独的图（比例约 0.7），封面 pl.jpg 是左右两面的封套。
+  // 按封面地址拼 ps.jpg 只能拿到 90×122 的缩略图，竖版海报就得回退去裁封套，
+  // 封套中缝的几个像素会被带进海报左边。竖版海报在 pics_dig 路径下：
+  //   pics.dmm.co.jp/mono/movie/adult/<番号>/<番号>pl.jpg
+  //   → awsimgsrc.dmm.co.jp/pics_dig/mono/movie/<番号>/<番号>ps.jpg（1028×1477）
+  // digital/video 和 dig/mono/movie 的路径只换 ps 并换到 CDN 主机，前缀各自保留。
+  var match = address.match(/^https?:\/\/(?:pics\.dmm\.co\.jp|awsimgsrc\.dmm\.(?:co\.jp|com))\/(.+)pl\.jpg(?:[?#].*)?$/i);
   if (!match) return "";
-  var path = match[1];
-  var digital = path.match(/^digital\/video\/([a-z]+)([0-9]+)\/([^/]+)$/i);
-  if (digital) {
-    if (digital[1] + digital[2] !== digital[3]) return "";
-    var product = digital[1] + digital[2].replace(/^0+(?=[0-9]{3})/, "");
-    return "https://awsimgsrc.dmm.com/dig/mono/movie/" + product + "/" + product + "ps.jpg";
-  }
-  return "https://awsimgsrc.dmm.com/" + path + "ps.jpg";
+  var path = match[1].replace(/^pics_dig\//i, "").replace(/^mono\/movie\/adult\//i, "mono/movie/");
+  if (/^dig\//i.test(path)) return "https://awsimgsrc.dmm.co.jp/" + path + "ps.jpg";
+  return "https://awsimgsrc.dmm.co.jp/pics_dig/" + path + "ps.jpg";
 }
 // searchWorks 用 query 搜索站内作品，返回链接中的番号与 number 完全相同的作品路径。
 function searchWorks(query, number) {
